@@ -1,8 +1,6 @@
 #!/bin/bash
-# SlideGuard - Run the development server
+# SlideGuard - Run the development server with uv
 # Usage: ./run.sh
 
 cd "$(dirname "$0")"
-export PYTHONPATH="$(pwd):$PYTHONPATH"
-echo "Starting SlideGuard..."
-python3 backend/app.py
+uv run python backend/app.py

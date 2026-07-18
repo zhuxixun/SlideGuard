@@ -47,15 +47,19 @@
 
 ## 快速开始
 
+### 前提条件
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)（安装：`curl -LsSf https://astral.sh/uv/install.sh | sh`）
+
 ### 方式一：直接运行（开发模式）
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖并创建虚拟环境
+uv sync
 
-# 启动
-export PYTHONPATH=$(pwd):$PYTHONPATH
-python3 backend/app.py
+# 启动服务
+uv run python backend/app.py
 ```
 
 或使用启动脚本：
@@ -70,11 +74,20 @@ chmod +x run.sh
 ### 方式二：打包为独立二进制
 
 ```bash
-pip install pyinstaller
+# 安装构建依赖
+uv sync --group build
+
+# 打包
 python build.py
 ```
 
 运行 `dist/SlideGuard`（Windows 上为 `dist/SlideGuard.exe`）即可。
+
+### 运行测试
+
+```bash
+uv run pytest tests/ -v
+```
 
 ## 技术栈
 
@@ -149,14 +162,14 @@ tests/                  # 28 个测试用例 (pytest)
 ## 开发
 
 ```bash
-# 安装开发依赖
-pip install pytest
+# 安装所有依赖（包含开发依赖）
+uv sync --group dev
 
 # 运行测试
-PYTHONPATH=$(pwd) python3 -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # 运行所有测试
-PYTHONPATH=$(pwd) python3 -m pytest tests/
+uv run pytest tests/
 ```
 
 ## API 接口

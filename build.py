@@ -1,7 +1,7 @@
 """SlideGuard PyInstaller build script.
 
 Usage:
-    pip install pyinstaller
+    uv sync --group build
     python build.py
 """
 
@@ -16,9 +16,9 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 for d in ['build', 'dist', '__pycache__']:
     shutil.rmtree(d, ignore_errors=True)
 
-# PyInstaller command
+# PyInstaller command (use uv run to use the managed venv)
 pyinstaller_args = [
-    'pyinstaller',
+    'uv', 'run', 'pyinstaller',
     '--name=SlideGuard',
     '--onefile',
     '--windowed',
@@ -40,9 +40,10 @@ pyinstaller_args = [
     'backend/app.py',
 ]
 
-cmd = ' '.join(pyinstaller_args)
-print(f"Running: {cmd}")
-os.system(cmd)
+result = os.system(' '.join(pyinstaller_args))
+if result != 0:
+    print("Build failed!")
+    sys.exit(1)
 
 print("\n=== Build complete ===")
 print(f"Binary: dist/SlideGuard")

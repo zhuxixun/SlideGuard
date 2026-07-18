@@ -1,2 +1,0 @@
-# 依赖已迁移至 pyproject.toml
-# 使用 uv sync 安装

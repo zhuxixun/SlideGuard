@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SlideGuard - 离线PPT智能质检工具</title>
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div id="app">
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 32 32"><rect x="2" y="4" width="28" height="24" rx="2" fill="#2E75B6"/><polygon points="8,12 16,8 24,12 24,20 16,24 8,20" fill="white" opacity="0.9"/><polygon points="8,16 16,12 24,16" fill="none" stroke="#2E75B6" stroke-width="1.5"/></svg>
+            <h1>SlideGuard</h1>
+            <span class="offline-badge">离线运行</span>
+        </div>
+        <nav>
+            <button class="nav-btn active" data-view="scan" onclick="showView('scan')">质检</button>
+            <button class="nav-btn" data-view="report" onclick="showView('report')" disabled id="report-btn">报告</button>
+            <button class="nav-btn" data-view="fix" onclick="showView('fix')" disabled id="fix-btn">修复</button>
+        </nav>
+        <div class="header-actions">
+            <button class="btn-download" onclick="downloadReport()" disabled id="download-btn">导出报告</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Scan View -->
+        <div id="view-scan" class="view active">
+            <!-- Upload Area -->
+            <div id="upload-area" class="upload-area" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+                <div class="upload-icon">
+                    <svg width="64" height="64" viewBox="0 0 64 64"><rect x="6" y="10" width="52" height="44" rx="4" fill="#e8f0fe" stroke="#2E75B6" stroke-width="2"/><polygon points="24,30 32,20 40,30" fill="#2E75B6"/><rect x="28" y="28" width="8" height="12" fill="#2E75B6"/></svg>
+                </div>
+                <h2>拖拽 .pptx 文件到此处</h2>
+                <p>或点击下方按钮选择文件</p>
+                <button class="btn-primary" onclick="document.getElementById('file-input').click()">打开PPT</button>
+                <input type="file" id="file-input" accept=".pptx" style="display:none" onchange="handleFile(this.files[0])">
+                <p class="privacy-note">文件仅在本机处理，不会上传至任何服务器</p>
+            </div>
+
+            <!-- Scan Progress (hidden by default) -->
+            <div id="scan-progress" class="scan-progress" style="display:none">
+                <h2>正在扫描...</h2>
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                <p id="scan-status">正在解析PPT文件...</p>
+                <button class="btn-secondary" onclick="cancelScan()">取消</button>
+            </div>
+
+            <!-- Results (hidden by default) -->
+            <div id="results-area" class="results-area" style="display:none">
+                <!-- Score Summary -->
+                <div class="score-summary">
+                    <div class="score-card main-score">
+                        <div class="score-label">总体评分</div>
+                        <div class="score-value" id="total-score">0</div>
+                    </div>
+                    <div class="score-card" onclick="filterBySeverity('S1')">
+                        <div class="score-label">严重问题</div>
+                        <div class="score-value red" id="s1-count">0</div>
+                    </div>
+                    <div class="score-card" onclick="filterBySeverity('S2')">
+                        <div class="score-label">高风险</div>
+                        <div class="score-value orange" id="s2-count">0</div>
+                    </div>
+                    <div class="score-card" onclick="filterBySeverity('S3')">
+                        <div class="score-label">一般问题</div>
+                        <div class="score-value blue" id="s3-count">0</div>
+                    </div>
+                    <div class="score-card" onclick="filterBySeverity('S4')">
+                        <div class="score-label">建议优化</div>
+                        <div class="score-value gray" id="s4-count">0</div>
+                    </div>
+                    <div class="score-card fixable">
+                        <div class="score-label">可自动修复</div>
+                        <div class="score-value green" id="fixable-count">0</div>
+                    </div>
+                </div>
+
+                <!-- Dimension Scores -->
+                <div class="dimensions" id="dimensions"></div>
+
+                <!-- Three-panel layout -->
+                <div class="three-panel">
+                    <!-- Left: Page Thumbnails -->
+                    <div class="panel panel-left">
+                        <h3>页面列表</h3>
+                        <div class="filter-bar">
+                            <select id="filter-severity" onchange="applyFilters()">
+                                <option value="">全部等级</option>
+                                <option value="S1">S1 严重</option>
+                                <option value="S2">S2 高风险</option>
+                                <option value="S3">S3 一般</option>
+                                <option value="S4">S4 建议</option>
+                            </select>
+                            <select id="filter-fixable" onchange="applyFilters()">
+                                <option value="">全部状态</option>
+                                <option value="fixable">可修复</option>
+                                <option value="not_fixable">不可修复</option>
+                            </select>
+                        </div>
+                        <div class="slide-list" id="slide-list"></div>
+                    </div>
+
+                    <!-- Middle: Preview -->
+                    <div class="panel panel-middle">
+                        <h3 id="preview-title">点击左侧页面查看详情</h3>
+                        <div class="preview-canvas" id="preview-canvas">
+                            <div class="preview-placeholder" id="preview-placeholder">
+                                <p>选择一个页面查看问题详情</p>
+                            </div>
+                            <canvas id="slide-canvas" style="display:none"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Right: Issue Detail -->
+                    <div class="panel panel-right">
+                        <h3>问题详情</h3>
+                        <div class="issue-detail" id="issue-detail">
+                            <div class="issue-placeholder">点击左侧页面查看问题</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report View -->
+        <div id="view-report" class="view" style="display:none">
+            <iframe id="report-frame" style="width:100%;height:calc(100vh - 80px);border:none;"></iframe>
+        </div>
+
+        <!-- Fix View -->
+        <div id="view-fix" class="view" style="display:none">
+            <div class="fix-container">
+                <h2>修复确认</h2>
+                <div id="fix-summary">
+                    <p>共 <strong id="fix-count">0</strong> 个问题可自动修复</p>
+                </div>
+                <div class="fix-compare" id="fix-compare">
+                    <div class="compare-card">
+                        <h4>修复前</h4>
+                        <div class="big-score" id="before-score">0</div>
+                        <p id="before-issues">0 个问题</p>
+                    </div>
+                    <div class="compare-arrow">→</div>
+                    <div class="compare-card">
+                        <h4>修复后</h4>
+                        <div class="big-score" id="after-score">--</div>
+                        <p id="after-issues">-- 个问题</p>
+                    </div>
+                </div>
+                <div class="fix-actions">
+                    <button class="btn-primary" id="fix-confirm-btn" onclick="confirmFix()">确认修复并保存</button>
+                    <button class="btn-primary" id="fix-rescan-btn" onclick="reScan()" style="display:none">重新扫描验证</button>
+                    <button class="btn-download" id="fix-download-btn" onclick="downloadFile()" style="display:none">下载修复文件</button>
+                    <button class="btn-secondary" onclick="showView('scan')">返回</button>
+                </div>
+                <p class="privacy-note">原始文件不会被修改，修复结果保存为新文件</p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

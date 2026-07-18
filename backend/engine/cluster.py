@@ -136,6 +136,9 @@ class PageCluster:
                     dist = np.linalg.norm(X_scaled[i] - centroid)
                     min_dist = min(min_dist, dist)
                 anomaly_score = float(min_dist)
+                # Cap infinity for valid JSON serialization
+                if anomaly_score == float('inf'):
+                    anomaly_score = 999.0
             elif label in centroids:
                 centroid = np.mean(centroids[label], axis=0)
                 dist = np.linalg.norm(X_scaled[i] - centroid)

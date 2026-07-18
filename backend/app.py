@@ -10,7 +10,8 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, send_file, send_from_directory
+from flask import jsonify as _flask_jsonify
 
 from backend.config import RuleConfig
 from backend.engine.scanner import Scanner
@@ -28,6 +29,30 @@ scanner = Scanner(config)
 
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), 'slideguard')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _sanitize(obj):
+    """Replace Infinity/NaN with finite values for valid JSON."""
+    if isinstance(obj, float):
+        if obj == float('inf'):
+            return 999.0
+        if obj != obj:
+            return 0.0
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
+def jsonify(*args, **kwargs):
+    """Safe jsonify that sanitizes Infinity/NaN."""
+    if args:
+        args = tuple(_sanitize(a) for a in args)
+    if kwargs:
+        kwargs = {k: _sanitize(v) for k, v in kwargs.items()}
+    return _flask_jsonify(*args, **kwargs)
 
 
 def _issue_to_dict(issue):

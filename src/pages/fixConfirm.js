@@ -117,6 +117,7 @@ export function afterRenderFixConfirm() {
             newIssues: newIssues.slice(0, 20),
           },
           issues: verifyResult.issues,
+          pptxData: result.buffer, // 更新缓存，后续修复基于新文件
           hasScanResult: true,
         });
       } else {

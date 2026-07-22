@@ -2,6 +2,29 @@
 
 `pages/` 中的每个 HTML 都是可独立打开的页面设计源。页面以浏览器最大化使用为默认场景，不限定为 1600×900。
 
+## 文件命名规范
+
+文件名按侧边栏入口编号，后缀字母区分同一入口的不同状态：
+
+| 文件 | 侧边栏入口 | 状态说明 |
+|------|-----------|----------|
+| `01-home-file-import.html` | 首页 | 文件导入（空状态） |
+| `01a-file-loaded.html` | 首页 | 文件已加载，准备扫描 |
+| `02-scan-settings.html` | 扫描设置 | 三种扫描模式 |
+| `03-sensitive-words.html` | 敏感词库 | 词条管理 |
+| `04-scanning.html` | 扫描结果 | 扫描进行中 |
+| `04b-scan-result-overview.html` | 扫描结果 | 结果概览 |
+| `04c-issue-list.html` | 扫描结果 | 问题列表 |
+| `04a-scan-result-empty.html` | 扫描结果 | 空状态（无扫描历史） |
+| `05-issue-detail.html` | 问题详情 | 问题详情与定位 |
+| `05a-issue-detail-empty.html` | 问题详情 | 空状态（无扫描历史） |
+| `06-fix-confirmation.html` | 修复 | 修复确认 |
+| `06a-fix-empty.html` | 修复 | 空状态（无扫描历史） |
+| `07-fix-result.html` | 修复结果 | 修复完成 |
+| `07a-fix-result-empty.html` | 修复结果 | 空状态（无扫描历史） |
+
+每个 HTML 的 `data-page` 属性值与文件编号一致（如 `04b` → `data-page="4b"`），由 `mockups.js` 根据该值渲染对应页面。
+
 ## 布局规则
 
 - 应用根容器始终填满浏览器可视区域：`100vw × 100vh`。

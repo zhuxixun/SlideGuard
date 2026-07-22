@@ -1,0 +1,18 @@
+{
+  "name": "slideguard",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "离线 PowerPoint 质量与合规检查工具（纯浏览器端）",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "fast-xml-parser": "^5.0.0"
+  }
+}

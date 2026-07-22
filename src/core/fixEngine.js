@@ -143,16 +143,17 @@ function applyFix(xmlObj, issue) {
     if (!sp) continue;
 
     // 用 shapeId 或近似内容匹配
-    const spId = sp['@_id'] || (sp['p:nvSpPr']?.['@_id']) || (sp['nvSpPr']?.['@_id']);
+    const nvSpPr = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
+    const spId = sp['@_id'] || nvSpPr['p:cNvPr']?.['@_id'] || nvSpPr['cNvPr']?.['@_id'];
     const matchesId = issue.fixData && issue.fixData.shapeId && String(spId) === String(issue.fixData.shapeId);
 
     // 内容匹配（备用）
     let matchesText = false;
     if (!matchesId) {
       const txBody = sp['p:txBody'] || sp['txBody'];
-      if (txBody && issue.desc) {
+      if (txBody && issue.fixData?.textContent) {
         const textContent = extractTextFromShape(sp);
-        if (textContent && issue.desc.includes(textContent.slice(0, 20))) {
+        if (textContent && textContent === issue.fixData.textContent) {
           matchesText = true;
         }
       }

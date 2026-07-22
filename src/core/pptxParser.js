@@ -149,7 +149,7 @@ export function extractTexts(slideXml) {
         x, y, w, h,
         isTitle,
         phType,
-        shapeId: sp['@_id'] || nvs['@_id'],
+        shapeId: sp['@_id'] || nvs['p:cNvPr']?.['@_id'] || nvs['cNvPr']?.['@_id'],
       });
     }
   }

@@ -48,6 +48,7 @@ export function check(slide, presInfo) {
           page: page - 1, // 0-based
           shapeId: t.shapeId,
           targetFont: '微软雅黑',
+          textContent: t.text,
         },
       });
     }

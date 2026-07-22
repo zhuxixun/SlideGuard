@@ -1,1 +1,0 @@
-"""SlideGuard backend package."""

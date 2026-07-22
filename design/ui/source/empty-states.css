@@ -1,0 +1,1 @@
+.empty-state{height:610px;display:grid;place-items:center;text-align:center}.empty-state .empty-icon{width:72px;height:72px;margin:0 auto 20px;border-radius:50%;display:grid;place-items:center;color:var(--blue);background:#edf3ff;font-size:32px}.empty-state h2{font-size:24px;margin:0 0 12px}.empty-state p{color:var(--muted);margin:0}

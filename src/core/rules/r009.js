@@ -86,10 +86,12 @@ function checkTitleOverflow(t, page) {
             type: 'title-overflow',
             page: page - 1,
             shapeId: t.shapeId,
+            textContent: t.text,
             colonIndex: colonIdx,
             textBefore: text.slice(0, colonIdx + 1),
             textAfter: text.slice(colonIdx + 1),
             targetSizeAfter: Math.round(targetSize),
+            x: t.x, y: t.y, w: t.w, h: t.h,
           },
         });
       } else {
@@ -185,6 +187,12 @@ function checkStyle(slide, presInfo) {
         suggestion: '自动替换为微软雅黑',
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: page - 1,
+          shapeId: t.shapeId,
+          textContent: t.text,
+          x: t.x, y: t.y, w: t.w, h: t.h,
+        },
       });
     }
 
@@ -205,6 +213,12 @@ function checkStyle(slide, presInfo) {
         suggestion: '自动替换为 RGB(192,0,0)',
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: page - 1,
+          shapeId: t.shapeId,
+          textContent: t.text,
+          x: t.x, y: t.y, w: t.w, h: t.h,
+        },
       });
     }
 
@@ -225,6 +239,12 @@ function checkStyle(slide, presInfo) {
         suggestion: '自动调整为 24pt',
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: page - 1,
+          shapeId: t.shapeId,
+          textContent: t.text,
+          x: t.x, y: t.y, w: t.w, h: t.h,
+        },
       });
     }
 
@@ -245,6 +265,12 @@ function checkStyle(slide, presInfo) {
         suggestion: '自动设置为加粗',
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: page - 1,
+          shapeId: t.shapeId,
+          textContent: t.text,
+          x: t.x, y: t.y, w: t.w, h: t.h,
+        },
       });
     }
 

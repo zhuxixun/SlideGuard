@@ -54,6 +54,15 @@ function checkTooSmall(texts, page) {
         suggestion: type === 'note' ? '建议调整至 10pt 或更大' : '建议调整至 14pt 或更大',
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: page - 1,
+          shapeId: t.shapeId,
+          textContent: t.text,
+          x: t.x,
+          y: t.y,
+          w: t.w,
+          h: t.h,
+        },
       });
     }
   }
@@ -72,7 +81,7 @@ function checkInconsistency(allSlides, presInfo) {
     for (const t of slide.texts) {
       if (guessTextType(t) !== 'body') continue;
       if (!t.fontSize) continue;
-      bodySizes.push({ fontSize: t.fontSize, page: slide.page, text: t.text });
+      bodySizes.push({ fontSize: t.fontSize, page: slide.page, text: t.text, shapeId: t.shapeId, x: t.x, y: t.y, w: t.w, h: t.h });
     }
   }
 
@@ -108,6 +117,15 @@ function checkInconsistency(allSlides, presInfo) {
         suggestion: `建议统一为 ${mainSize}pt`,
         fixable: true,
         status: '待处理',
+        fixData: {
+          page: b.page - 1,
+          shapeId: b.shapeId,
+          textContent: b.text,
+          x: b.x,
+          y: b.y,
+          w: b.w,
+          h: b.h,
+        },
       });
     }
   }

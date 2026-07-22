@@ -67,7 +67,7 @@ export async function fixIssues(pptxData, issues) {
     if (!slideFile) {
       for (const iss of pageIssues) {
         failed++;
-        errors.push(`R004: 第 ${pageStr} 页幻灯片文件缺失`);
+        errors.push(`${iss.rule || 'R???'}: 第 ${pageStr} 页幻灯片文件缺失`);
         iss.status = '修复失败';
       }
       continue;
@@ -87,12 +87,12 @@ export async function fixIssues(pptxData, issues) {
             issue.status = '已修复';
           } else {
             failed++;
-            errors.push(`R004: 第 ${pageStr} 页未找到目标对象`);
+            errors.push(`${issue.rule || 'R???'}: 第 ${pageStr} 页未找到目标对象`);
             issue.status = '修复失败';
           }
         } catch (e) {
           failed++;
-          errors.push(`R004: 第 ${pageStr} 页修复失败: ${e.message}`);
+          errors.push(`${issue.rule || 'R???'}: 第 ${pageStr} 页修复失败: ${e.message}`);
           issue.status = '修复失败';
         }
       }
@@ -105,7 +105,7 @@ export async function fixIssues(pptxData, issues) {
     } catch (e) {
       for (const iss of pageIssues) {
         failed++;
-        errors.push(`R004: 第 ${pageStr} 页处理失败: ${e.message}`);
+        errors.push(`${iss.rule || 'R???'}: 第 ${pageStr} 页处理失败: ${e.message}`);
         iss.status = '修复失败';
       }
     }
@@ -152,14 +152,29 @@ function applyFix(xmlObj, issue) {
     if (!matchesId) {
       const txBody = sp['p:txBody'] || sp['txBody'];
       if (txBody && issue.fixData?.textContent) {
-        const textContent = extractTextFromShape(sp);
-        if (textContent && textContent === issue.fixData.textContent) {
+        const textContent = extractTextFromShape(sp).replace(/\n/g, '');
+        const targetText = issue.fixData.textContent.replace(/\n/g, '');
+        if (textContent && textContent === targetText) {
           matchesText = true;
         }
       }
     }
 
-    if (!matchesId && !matchesText) continue;
+    // 位置匹配（最后备用）
+    let matchesPosition = false;
+    if (!matchesId && !matchesText && issue.fixData?.x != null && issue.fixData?.y != null) {
+      const spPr = sp['p:spPr'] || sp['spPr'] || {};
+      const xfrm = spPr['a:xfrm'] || spPr['xfrm'] || {};
+      const off = xfrm['a:off'] || xfrm['off'] || {};
+      const sx = parseFloat(off['@_x']) || 0;
+      const sy = parseFloat(off['@_y']) || 0;
+      const tolerance = 12700; // 1pt
+      if (Math.abs(sx - issue.fixData.x) <= tolerance && Math.abs(sy - issue.fixData.y) <= tolerance) {
+        matchesPosition = true;
+      }
+    }
+
+    if (!matchesId && !matchesText && !matchesPosition) continue;
 
     // 根据规则类型应用修复
     switch (issue.rule) {

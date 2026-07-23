@@ -17,7 +17,7 @@ export function renderFixResult(state) {
 
   return `
     <div class="success">
-      <div class="tick">●✓</div>
+      <div class="tick" style="color:${fixed > 0 ? 'var(--green)' : 'var(--orange)'}">${fixed > 0 ? '●✓' : '○—'}</div>
       <h1>${fixed > 0 ? '修复完成' : '修复未完成'}</h1>
       <p class="muted">${fr.fileName ? '文件已保存为新文件，原始文件保持不变' : '修复过程中出现问题，请查看下方错误信息'}</p>
       <div class="input" style="width:850px;margin:auto;text-align:center;justify-content:center">${fr.fileName || '修复未生成文件'}</div>

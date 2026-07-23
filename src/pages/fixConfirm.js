@@ -27,7 +27,7 @@ export function renderFixConfirm(state) {
     <div class="card empty-state" style="margin-top:40px;padding:60px;text-align:center">
       <div class="empty-icon">◇</div>
       <h2>选中项中无可修复的问题</h2>
-      <p class="muted">只有 R004（字体）、R006（对齐）、R008（标题样式）问题可自动修复</p>
+      <p class="muted">只有字体、对齐、标题样式问题可自动修复</p>
       <button class="btn primary" onclick="location.hash='issue-list'">返回问题列表</button>
     </div>` : `
     <div class="grid fix-grid">
@@ -44,7 +44,7 @@ export function renderFixConfirm(state) {
           ${fixable.map(x => `
             <tr>
               <td>${x.page}</td>
-              <td>${x.rule || ''}</td>
+              <td>${x.object || x.rule || ''}</td>
               <td>${typeMap[x.rule] || x.rule || '自动修复'}</td>
               <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.actual || '-'}</td>
               <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.expected || '-'}</td>

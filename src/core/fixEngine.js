@@ -286,27 +286,32 @@ function fixFontSize(sp, issue) {
   const paragraphs = txBody['a:p'] || [];
   const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
   let changed = false;
+  const targetEmu = targetSize * 100; // hundredths of a point
 
   for (const p of pars) {
-    const pPr = p['a:pPr'];
-    if (pPr) {
-      const defRPr = pPr['a:defRPr'];
-      if (defRPr && defRPr['@_sz'] && parseFloat(defRPr['@_sz']) !== targetSize * 100) {
-        defRPr['@_sz'] = targetSize * 100;
-        changed = true;
-      }
-    }
-
+    let hasRunLevelSz = false;
     const runs = p['a:r'] || [];
     const runList = Array.isArray(runs) ? runs : [runs];
     for (const r of runList) {
       const rPr = r['a:rPr'];
-      if (rPr && rPr['@_sz']) {
+      if (!rPr) continue;
+      if (rPr['@_sz']) {
+        hasRunLevelSz = true;
         const current = parseFloat(rPr['@_sz']);
-        if (Math.abs(current - targetSize * 100) > 2 * 100) { // 偏差 > 2pt
-          rPr['@_sz'] = targetSize * 100;
+        if (Math.abs(current - targetEmu) > 2 * 100) { // 偏差 > 2pt
+          rPr['@_sz'] = targetEmu;
           changed = true;
         }
+      }
+    }
+
+    // 段落默认属性（defRPr）：只在 run 级无显式字号时才生效
+    if (!hasRunLevelSz) {
+      const pPr = p['a:pPr'] || (() => { p['a:pPr'] = {}; return p['a:pPr']; })();
+      const defRPr = pPr['a:defRPr'] || (() => { pPr['a:defRPr'] = {}; return pPr['a:defRPr']; })();
+      if (parseFloat(defRPr['@_sz'] || 0) !== targetEmu) {
+        defRPr['@_sz'] = targetEmu;
+        changed = true;
       }
     }
   }

@@ -1,168 +1,116 @@
 /**
  * 问题详情与定位
  *
- * 实时渲染幻灯片文本预览 + 问题高亮
- * 支持：
- *   - 同页面问题列表，快速切换
- *   - 页面缩略图导航，显示问题数量
- *   - 多种高亮匹配策略
+ * 按新版详情页设计组织页面缩略图、结构化预览和问题说明，同时保留
+ * 问题切换、忽略及进入自动修复流程的能力。
  */
 import { store } from '../store.js';
 import { renderSlidePreview, renderThumbnail, findHighlightIndex, getHighlightPosition } from '../utils/preview.js';
 
-const PREVIEW_WIDTH = 580;  // px
+const PREVIEW_WIDTH = 720;
+
+function objectLabel(issue) {
+  return issue.object || issue.fixData?.objectType || (issue.rule === 'R009' ? '正文文本框' : '页面对象');
+}
+
+function renderDetailContent(issue, located) {
+  if (!located) {
+    return `
+      <div class="state-banner unlocated"><b>无法在预览中定位</b><span>检测结论仍可查看，但必须回到原始 PowerPoint 核实页面内容。</span></div>
+      <div class="detail-section"><h3>发生了什么</h3><p>${issue.reason || '当前预览引擎无法完整解析该对象，因此不能可靠标出具体问题位置。'}</p></div>
+      <div class="detail-section advice"><h3>下一步怎么做</h3><p>${issue.suggestion || `在 PowerPoint 中打开第 ${issue.page} 页，核实对应内容后再决定是否忽略本条提示。`}</p></div>`;
+  }
+
+  if (!issue.fixable) {
+    const range = issue.charRange ? `第 ${issue.charRange[0]}–${issue.charRange[1]} 个字符` : '请结合上下文核实';
+    return `
+      <div class="state-banner manual"><b>需要人工核实</b><span>涉及文本语义或复杂版面，SlideGuard 不会自动修改。</span></div>
+      ${issue.sensitiveWord ? `<div class="hit-word"><span>命中词条</span><strong>“${issue.sensitiveWord}”</strong><small>${range}</small></div>` : ''}
+      <div class="detail-section"><h3>为什么这样判断</h3><p>${issue.reason || '该问题需要结合原始页面内容和使用场景进行人工判断。'}</p></div>
+      <div class="detail-section advice manual-advice"><h3>建议如何处理</h3><p>${issue.suggestion || '请在 PowerPoint 中核实并手动调整对应内容。'}</p></div>`;
+  }
+
+  return `
+    <div class="state-banner auto"><b>可安全自动修复</b><span>仅调整检测到的对象属性，不改变其他页面内容。</span></div>
+    <div class="value-compare"><div><span>实际值</span><strong>${issue.actual || '-'}</strong></div><b>→</b><div><span>建议值</span><strong>${issue.expected || '-'}</strong></div></div>
+    <div class="detail-section"><h3>为什么这样判断</h3><p>${issue.reason || '当前对象与检测规则或演示文稿中的主流样式不一致。'}</p></div>
+    <div class="detail-section advice"><h3>建议如何处理</h3><p>${issue.suggestion || '按建议值调整该对象，使其与页面规范保持一致。'}</p></div>`;
+}
 
 export function renderIssueDetail(state) {
   const issues = state.issues || [];
-  const idx = state.currentIssueIndex >= 0 ? state.currentIssueIndex : 0;
-  const issue = issues[idx] || { page: 1, type: '未知', level: 's3', desc: '无数据' };
+  const idx = Math.min(Math.max(state.currentIssueIndex || 0, 0), Math.max(issues.length - 1, 0));
+  const issue = issues[idx] || { page: 1, type: '未知问题', level: 's3', desc: '暂无问题数据' };
   const slides = state.slidePreviews || [];
   const presInfo = state.presInfo || { width: 12192000, height: 6858000 };
-  const sw = presInfo.width;
-  const sh = presInfo.height;
-  const scale = PREVIEW_WIDTH / sw;
-  const previewH = Math.round(sh * scale) + 2;
-
-  // 当前页幻灯片
-  const curSlide = slides.find(s => s.page === issue.page) || { page: issue.page, texts: [], shapes: [] };
+  const curSlide = slides.find(slide => slide.page === issue.page) || { page: issue.page, texts: [], shapes: [] };
   const hlIdx = findHighlightIndex(curSlide, issue);
   const hlPos = hlIdx < 0 ? getHighlightPosition(curSlide, issue) : null;
-
-  // 对齐问题的参考数据
-  const refPos = (issue.rule === 'R006' && issue.refPositions) ? issue.refPositions : null;
-  const alignLine = (issue.rule === 'R006' && issue.alignDim && issue.alignValue != null)
-    ? { dim: issue.alignDim, value: issue.alignValue } : null;
-
-  // 预览 HTML
-  const previewHTML = curSlide.texts.length > 0 || curSlide.shapes.length > 0
+  const hasPreview = curSlide.texts.length > 0 || curSlide.shapes.length > 0;
+  const located = hasPreview && (hlIdx >= 0 || Boolean(hlPos));
+  const refPos = issue.rule === 'R006' && issue.refPositions ? issue.refPositions : null;
+  const alignLine = issue.rule === 'R006' && issue.alignDim && issue.alignValue != null
+    ? { dim: issue.alignDim, value: issue.alignValue }
+    : null;
+  const previewHTML = hasPreview
     ? renderSlidePreview(curSlide, presInfo, PREVIEW_WIDTH, hlIdx, refPos, alignLine, hlPos)
-    : `<div style="display:flex;align-items:center;justify-content:center;height:${previewH}px;background:#fafbfc;border:1px solid #cfd7e3;color:var(--muted);font-size:14px">${curSlide.loadError ? '页面加载失败：' + curSlide.loadError : '无内容可预览'}</div>`;
+    : `<div class="preview-unavailable"><b>${curSlide.loadError ? '页面加载失败' : '此页无可用预览'}</b><span>${curSlide.loadError || '请打开原始 PowerPoint 查看页面内容。'}</span></div>`;
 
-  // === 页面缩略图导航（显示有问题的页面）===
-  const issuePages = [...new Set(issues.map(x => x.page))].sort((a, b) => a - b);
-  // 限制最多显示 10 个页面缩略图
-  const displayPages = issuePages.slice(0, 10);
-  const hasMorePages = issuePages.length > 10;
-
-  // === 当前页面所有问题列表（用于快速切换）===
-  const curPageIssues = issues
-    .map((x, i) => ({ idx: i, ...x }))
-    .filter(x => x.page === issue.page);
-
-  const pageLevelOrder = { s1: 0, s2: 1, s3: 2, s4: 3 };
-  curPageIssues.sort((a, b) => (pageLevelOrder[a.level] ?? 9) - (pageLevelOrder[b.level] ?? 9));
-
-  const levelLabels = {
-    s1: 'S1 严重', s2: 'S2 高风险', s3: 'S3 一般', s4: 'S4 建议',
-  };
+  const issuePages = [...new Set(issues.map(item => item.page))].sort((a, b) => a - b);
+  const curPageIssues = issues.map((item, itemIdx) => ({ ...item, idx: itemIdx })).filter(item => item.page === issue.page);
+  const levelLabels = { s1: 'S1 严重', s2: 'S2 高风险', s3: 'S3 一般', s4: 'S4 提示' };
+  const panelState = !located ? 'panel-unlocated' : issue.fixable ? 'panel-auto' : 'panel-manual';
+  const stageState = !located ? 'stage-unlocated' : !issue.fixable ? 'stage-manual' : '';
 
   return `
-    <div class="heading">
-      <div>
-        <h1>问题详情与定位</h1>
-        <div class="muted">页面 ${issue.page} / ${state.pageCount || '-'}　问题 ${idx + 1}/${issues.length}${issue.rule ? '　' + issue.rule : ''}</div>
-      </div>
-      <div class="toolbar">
-        <button class="btn" onclick="showIssue(${idx - 1})" ${idx <= 0 ? 'disabled' : ''}>上一个</button>
-        <button class="btn" onclick="showIssue(${idx + 1})" ${idx >= issues.length - 1 ? 'disabled' : ''}>下一个</button>
-      </div>
+    <div class="detail-top">
+      <button class="back-link" onclick="location.hash='issue-list'">← 返回问题列表</button>
+      <div class="issue-progress">第 ${issues.length ? idx + 1 : 0} / ${issues.length} 个问题</div>
+      <div class="toolbar"><button class="btn" onclick="showIssue(${idx - 1})" ${idx <= 0 ? 'disabled' : ''}>上一个</button><button class="btn" onclick="showIssue(${idx + 1})" ${idx >= issues.length - 1 ? 'disabled' : ''}>下一个</button></div>
     </div>
-    <div class="detail">
-      <div class="card slides">
-        <div class="thumbs" style="overflow-y:auto">
-          ${displayPages.map(pg => {
-            const pgIssues = issues.filter(x => x.page === pg);
-            const s = slides.find(sl => sl.page === pg);
-            const isActive = pg === issue.page;
-            // 跳转到该页的第一个问题的索引
-            const firstIdx = issues.findIndex(x => x.page === pg);
-            const maxLevel = pgIssues.reduce((max, x) => x.level && x.level < max ? x.level : max, 's4');
-            const levelColor = { s1: '#e5484d', s2: '#ef7b24', s3: '#e5a11a', s4: '#3c6596' };
-            return `
-              <div style="margin-bottom:14px;text-align:center;position:relative" onclick="showIssue(${firstIdx})">
-                ${renderThumbnail(s || { page: pg, texts: [], shapes: [] }, presInfo, 130, isActive)}
-                <small style="display:block;margin-top:4px;color:var(--muted);font-size:11px">
-                  第 ${pg} 页
-                  <span style="color:${levelColor[maxLevel] || '#647086'};font-weight:700">(${pgIssues.length})</span>
-                </small>
-              </div>`;
-          }).join('')}
-          ${hasMorePages ? '<div style="text-align:center;color:var(--muted);font-size:12px">…还有 ' + (issuePages.length - 10) + ' 页</div>' : ''}
-          ${issuePages.length === 0 ? '<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">暂无问题页面</div>' : ''}
-        </div>
-        <div class="preview" style="overflow:auto;padding:16px">
-          <div style="min-height:${previewH + 40}px;display:flex;flex-direction:column;align-items:center">
-            ${previewHTML}
-            ${hlIdx >= 0
-              ? '<div style="margin-top:8px;font-size:12px;color:#e5484d">● 红框标注为问题对象</div>'
-              : hlPos
-                ? '<div style="margin-top:8px;font-size:12px;color:#ef7b24">● 红虚框为按坐标定位的问题元素区域</div>'
-                : '<div style="margin-top:8px;font-size:12px;color:#647086">● 未能在预览中定位到问题元素（可能为非文本对象）</div>'}
-            <div class="muted" style="margin-top:12px;font-size:12px">缩放 72%　　－　＋　　　　　　　　　　　　　适应窗口</div>
+    <div class="detail detail-v2">
+      <div class="detail-workspace">
+        <aside class="card detail-pages">
+          <div class="detail-pages-title"><b>问题页面</b><span>${issuePages.length} 页</span></div>
+          <div class="detail-thumb-list">
+            ${issuePages.map(page => {
+              const pageIssues = issues.filter(item => item.page === page);
+              const firstIdx = issues.findIndex(item => item.page === page);
+              const slide = slides.find(item => item.page === page) || { page, texts: [], shapes: [] };
+              const highest = [...pageIssues].sort((a, b) => (a.level || 's4').localeCompare(b.level || 's4'))[0]?.level || 's4';
+              return `<button class="detail-thumb${page === issue.page ? ' active' : ''}" onclick="showIssue(${firstIdx})" aria-label="查看第 ${page} 页">
+                <span class="thumb-render">${renderThumbnail(slide, presInfo, 180, page === issue.page)}</span>
+                <span>第 ${page} 页</span><em class="${highest}">${pageIssues.length}</em>
+              </button>`;
+            }).join('') || '<div class="detail-empty">暂无问题页面</div>'}
           </div>
-        </div>
+        </aside>
+        <section class="card preview detail-preview">
+          <div class="preview-meta"><div><b>第 ${issue.page} 页</b><span>${hasPreview ? `本页 ${curPageIssues.length} 个问题` : '预览异常'}</span></div><span class="preview-note">结构化预览，可能与 PowerPoint 略有差异</span></div>
+          <div class="preview-stage ${stageState}"><div class="preview-scale">${previewHTML}</div></div>
+          <div class="page-issue-switch ${!located ? 'warning-switch' : ''}">
+            ${!located ? '<span>⚠ 无法显示问题标记</span>' : `<span>本页问题</span>${curPageIssues.map((item, pageIdx) => `<button class="${item.idx === idx ? 'active' : ''}" onclick="showIssue(${item.idx})" aria-label="查看本页第 ${pageIdx + 1} 个问题">${pageIdx + 1}</button>`).join('')}`}
+          </div>
+        </section>
       </div>
-      <div class="card panel">
-        <h2>⚠ ${issue.type}${issue.rule ? '（' + issue.rule + '）' : ''}</h2>
-        <span class="badge ${issue.level}">${levelLabels[issue.level] || issue.level.toUpperCase()}</span>
-        <div class="field"><b>页面</b>${issue.page} <span style="color:var(--muted);font-size:12px">（本页共 ${curPageIssues.length} 个问题）</span></div>
-        <div class="field"><b>实际值</b>${issue.actual || '-'}</div>
-        <div class="field"><b>标准值</b>${issue.expected || '-'}</div>
-        <div class="field"><b>标准来源</b>${issue.source || '-'}</div>
-        <div class="field"><b>判断依据</b>${issue.reason || '-'}</div>
-        <div class="field"><b>修改建议</b>${issue.suggestion || '-'}</div>
-        <div class="field"><b>可自动修复</b>${issue.fixable ? '是' : '否'}</div>
-
-        <!-- 当前页面的全部问题列表（快速切换） -->
-        ${curPageIssues.length > 1 ? `
-        <div class="field" style="border-bottom:none;padding-bottom:4px">
-          <b>本页全部问题</b>
-        </div>
-        <div style="margin:0 0 12px 0;border:1px solid #edf0f4;border-radius:8px;overflow:hidden">
-          ${curPageIssues.map(pi => `
-            <div onclick="showIssue(${pi.idx})" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f0f2f6;${pi.idx === idx ? 'background:#edf3ff;' : ''}transition:background 0.15s"
-                 onmouseover="this.style.background='#f5f7fc'" onmouseout="this.style.background='${pi.idx === idx ? '#edf3ff' : 'transparent'}'">
-              <span class="badge ${pi.level}" style="font-size:10px;height:20px;padding:0 7px;flex-shrink:0">${levelLabels[pi.level]}</span>
-              <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${pi.idx === idx ? 'var(--blue)' : '#172033'}">${pi.desc}</span>
-              ${pi.fixable ? '<span style="color:var(--green);font-size:11px">可修复</span>' : ''}
-              <span style="color:var(--muted);font-size:11px">${pi.rule || ''}</span>
-            </div>
-          `).join('')}
-        </div>` : ''}
-
-        <div class="field" style="cursor:pointer" id="techInfoToggle"><b>▸ 技术信息</b></div>
-        <div id="techInfoContent" style="display:none;padding:8px 0">
-          <div class="field"><b>对象类型</b>${issue.object || '-'}</div>
-          <div class="field"><b>处理状态</b>${issue.status || '待处理'}</div>
-          ${issue.sensitiveWord ? '<div class="field"><b>命中词条</b>' + issue.sensitiveWord + '</div>' : ''}
-          ${issue.charRange ? '<div class="field"><b>字符范围</b>第 ' + issue.charRange[0] + '-' + issue.charRange[1] + ' 字符</div>' : ''}
-          ${issue.fixData?.shapeId ? '<div class="field"><b>对象 ID</b>' + issue.fixData.shapeId + '</div>' : ''}
-        </div>
-
-        <!-- 导航：上一页 / 下一页 同页问题 -->
-        <div style="display:flex;justify-content:space-between;gap:8px;margin-top:16px;padding:0 0 12px 0;border-bottom:1px solid #edf0f4">
-          ${(() => {
-            const prevOnPage = curPageIssues.filter(x => x.idx < idx);
-            const nextOnPage = curPageIssues.filter(x => x.idx > idx);
-            const prevOne = prevOnPage[prevOnPage.length - 1];
-            const nextOne = nextOnPage[0];
-            return `
-              <button class="btn" onclick="showIssue(${prevOne ? prevOne.idx : idx})" style="font-size:12px;flex:1" ${prevOne ? '' : 'disabled'}>↑ 本页上一个</button>
-              <button class="btn" onclick="showIssue(${nextOne ? nextOne.idx : idx})" style="font-size:12px;flex:1" ${nextOne ? '' : 'disabled'}>↓ 本页下一个</button>
-            `;
-          })()}
-        </div>
-
-        <div class="footer">
-          <button class="btn" id="ignoreIssueBtn" data-idx="${idx}">${issue.status === '已忽略' ? '取消忽略' : '忽略'}</button>
-          ${issue.fixable && !state.scanCancelled ? '<button class="btn primary" onclick="toggleFixIssue()">修复此问题</button>' : '<button class="btn" disabled>需手动处理</button>'}
-        </div>
-      </div>
-    </div>
-  `;
+      <aside class="card panel detail-panel ${panelState}">
+        <div class="issue-heading"><div><span class="badge ${issue.level || 's3'}">${levelLabels[issue.level] || issue.level || '提示'}</span><span class="issue-location">第 ${issue.page} 页 · ${objectLabel(issue)}</span></div><h1>${issue.desc || issue.type || '问题详情'}</h1></div>
+        ${renderDetailContent(issue, located)}
+        <details class="tech-details"><summary>技术信息</summary><dl>
+          <div><dt>规则 ID</dt><dd>${issue.rule || '-'}</dd></div>
+          <div><dt>对象 ID</dt><dd>${issue.fixData?.shapeId || '-'}</dd></div>
+          <div><dt>标准来源</dt><dd>${issue.source || '-'}</dd></div>
+          <div><dt>处理状态</dt><dd>${issue.status || '待处理'}</dd></div>
+        </dl></details>
+        ${!issue.fixable ? '<div class="manual-note"><b>需手动处理</b><span>自动修改可能改变内容语义或版面结构，请按上方建议在 PowerPoint 中处理。</span></div>' : ''}
+        <div class="detail-actions"><button class="btn" id="ignoreIssueBtn" data-idx="${idx}">${issue.status === '已忽略' ? '取消忽略' : '忽略'}</button>${issue.fixable && !state.scanCancelled ? '<button class="btn primary" onclick="toggleFixIssue()">修复此问题</button>' : ''}</div>
+      </aside>
+    </div>`;
 }
 
 window.showIssue = function(idx) {
+  const issues = store.get('issues') || [];
+  if (idx < 0 || idx >= issues.length) return;
   store.set('currentIssueIndex', idx);
   location.hash = 'issue-detail';
 };
@@ -170,36 +118,37 @@ window.showIssue = function(idx) {
 window.toggleFixIssue = function() {
   const idx = store.get('currentIssueIndex');
   if (idx < 0) return;
-  const sel = new Set(store.get('selectedIssues') || []);
-  sel.add(idx);
-  store.set('selectedIssues', sel);
+  const selected = new Set(store.get('selectedIssues') || []);
+  selected.add(idx);
+  store.set('selectedIssues', selected);
   location.hash = 'fix-confirm';
 };
 
+function fitPreview() {
+  const stage = document.querySelector('.preview-stage');
+  const scaleRoot = document.querySelector('.preview-scale');
+  const canvas = scaleRoot?.firstElementChild;
+  if (!stage || !scaleRoot || !canvas) return;
+  scaleRoot.style.transform = '';
+  const width = canvas.offsetWidth;
+  const height = canvas.offsetHeight;
+  if (!width || !height) return;
+  const scale = Math.min((stage.clientWidth - 32) / width, (stage.clientHeight - 32) / height, 1);
+  scaleRoot.style.transform = `scale(${Math.max(scale, 0.1)})`;
+}
+
 export function afterRenderIssueDetail() {
-  // 忽略/取消忽略按钮
   const ignoreBtn = document.getElementById('ignoreIssueBtn');
   if (ignoreBtn) {
     ignoreBtn.addEventListener('click', function() {
-      const idx = parseInt(this.dataset.idx);
+      const idx = Number(this.dataset.idx);
       const issues = store.get('issues') || [];
       if (idx < 0 || idx >= issues.length) return;
-      const issue = issues[idx];
-      const newStatus = issue.status === '已忽略' ? '待处理' : '已忽略';
-      const updated = issues.map((x, i) => i === idx ? { ...x, status: newStatus } : x);
+      const updated = issues.map((item, itemIdx) => itemIdx === idx ? { ...item, status: item.status === '已忽略' ? '待处理' : '已忽略' } : item);
       store.set('issues', updated);
       location.hash = 'issue-detail';
     });
   }
-
-  // 技术信息折叠
-  const toggle = document.getElementById('techInfoToggle');
-  const content = document.getElementById('techInfoContent');
-  if (toggle && content) {
-    toggle.addEventListener('click', function() {
-      const isHidden = content.style.display === 'none';
-      content.style.display = isHidden ? 'block' : 'none';
-      this.innerHTML = isHidden ? '▾ 技术信息' : '▸ 技术信息';
-    });
-  }
+  fitPreview();
+  window.addEventListener('resize', fitPreview, { once: true });
 }

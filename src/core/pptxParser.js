@@ -126,6 +126,12 @@ export function extractTexts(slideXml) {
     const y = parseFloat(off['@_y']) || 0;
     const w = parseFloat(ext['@_cx']) || 0;
     const h = parseFloat(ext['@_cy']) || 0;
+    const rotation = (parseFloat(xfrm['@_rot']) || 0) / 60000;
+    const radians = rotation * Math.PI / 180;
+    const visibleW = Math.abs(w * Math.cos(radians)) + Math.abs(h * Math.sin(radians));
+    const visibleH = Math.abs(w * Math.sin(radians)) + Math.abs(h * Math.cos(radians));
+    const visibleX = x + (w - visibleW) / 2;
+    const visibleY = y + (h - visibleH) / 2;
 
     // 提取文本
     const txBody = sp['p:txBody'] || sp['txBody'] || {};
@@ -136,6 +142,7 @@ export function extractTexts(slideXml) {
     let fontName = null;
     let bold = null; // null=继承未知 true=加粗 false=明确不加粗
     let color = null;
+    const styleRuns = [];
 
     const lstDefRPr = txBody['a:lstStyle']?.['a:defPPr']?.['a:defRPr'];
     for (const p of pars) {
@@ -145,6 +152,7 @@ export function extractTexts(slideXml) {
       const runList = Array.isArray(runs) ? runs : [runs];
       for (const r of runList) {
         const t = r['a:t']?.['#text'] ?? r['a:t'] ?? '';
+        const start = fullText.length;
         fullText += t;
         // 取第一个有效字体属性
         const rPr = r['a:rPr'] || r['rPr'] || {};
@@ -159,6 +167,20 @@ export function extractTexts(slideXml) {
           const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];
           if (srgb) color = srgb['@_val'];
         }
+        const runFont = rPr['@_typeface'] || rPr['a:ea']?.['@_typeface'] || rPr['a:latin']?.['@_typeface'] ||
+          defRPr['@_typeface'] || defRPr['a:ea']?.['@_typeface'] || defRPr['a:latin']?.['@_typeface'] ||
+          lstDefRPr?.['@_typeface'] || lstDefRPr?.['a:ea']?.['@_typeface'] || lstDefRPr?.['a:latin']?.['@_typeface'] || null;
+        const runFill = rPr['a:solidFill'] || defRPr['a:solidFill'] || lstDefRPr?.['a:solidFill'];
+        const runColor = runFill?.['a:srgbClr']?.['@_val'] || null;
+        styleRuns.push({
+          start,
+          end: fullText.length,
+          text: String(t),
+          fontName: runFont,
+          fontSize: rPr['@_sz'] ? parseFloat(rPr['@_sz']) / 100 : (defRPr['@_sz'] ? parseFloat(defRPr['@_sz']) / 100 : null),
+          bold: readBold(rPr) ?? readBold(defRPr) ?? readBold(lstDefRPr),
+          color: runColor,
+        });
       }
       // 检查段落默认属性（defRPr）— 独立处理每项属性
       if (!fontSize && defRPr['@_sz']) fontSize = parseFloat(defRPr['@_sz']) / 100;
@@ -185,9 +207,10 @@ export function extractTexts(slideXml) {
         fontName,
         bold,
         color,
-        x, y, w, h,
+        x, y, w, h, rotation, visibleX, visibleY, visibleW, visibleH,
         isTitle,
         phType,
+        styleRuns,
         shapeId: sp['@_id'] || nvs['p:cNvPr']?.['@_id'] || nvs['cNvPr']?.['@_id'],
       });
     }

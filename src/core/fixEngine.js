@@ -331,15 +331,8 @@ function fixPosition(sp, issue) {
   return true;
 }
 
-/**
- * R008: 标题样式修复（含超长标题冒号分割）
- */
+/** R008: 仅修复标题字体、字重和颜色，绝不改字号或版式。 */
 function fixTitle(sp, issue) {
-  // 超长标题冒号分割修复
-  if (issue.fixData?.type === 'title-overflow') {
-    return fixTitleOverflow(sp, issue);
-  }
-
   // 标准样式修复：根据实际问题的类型选择性修复
   const txBody = sp['p:txBody'] || sp['txBody'];
   if (!txBody) return false;
@@ -347,13 +340,10 @@ function fixTitle(sp, issue) {
   let changed = false;
   const paragraphs = txBody['a:p'] || [];
   const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
-  const desc = issue.desc || '';
-
-  // 判断需要修复的方面
-  const needFixFont = desc.includes('字体');
-  const needFixColor = desc.includes('颜色');
-  const needFixSize = desc.includes('字号') || desc.includes('溢出');
-  const needFixBold = desc.includes('加粗') || desc.includes('字重');
+  const property = issue.fixData?.property || issue.property;
+  const needFixFont = property === 'font';
+  const needFixColor = property === 'color';
+  const needFixBold = property === 'bold';
 
   for (const p of pars) {
     // 先处理段落默认属性
@@ -367,12 +357,6 @@ function fixTitle(sp, issue) {
         if (needFixColor) {
           if (setColorToStandard(defRPr)) changed = true;
         }
-        if (needFixSize && defRPr['@_sz']) {
-          if (parseFloat(defRPr['@_sz']) !== 2400) {
-            defRPr['@_sz'] = 2400;
-            changed = true;
-          }
-        }
         if (needFixBold && defRPr['@_b'] !== '1') {
           defRPr['@_b'] = '1';
           changed = true;
@@ -384,20 +368,17 @@ function fixTitle(sp, issue) {
     const runList = Array.isArray(runs) ? runs : [runs];
 
     for (const r of runList) {
-      const rPr = r['a:rPr'] || (r['rPr']);
-      if (!rPr) continue;
+      let rPr = r['a:rPr'] || r['rPr'];
+      if (!rPr && (needFixFont || needFixColor || needFixBold)) {
+        rPr = {};
+        r['a:rPr'] = rPr;
+      }
 
       if (needFixFont) {
         if (setFontToStandard(rPr)) changed = true;
       }
       if (needFixColor) {
         if (setColorToStandard(rPr)) changed = true;
-      }
-      if (needFixSize && rPr['@_sz']) {
-        if (parseFloat(rPr['@_sz']) !== 2400) {
-          rPr['@_sz'] = 2400;
-          changed = true;
-        }
       }
       if (needFixBold && rPr['@_b'] !== '1') {
         rPr['@_b'] = '1';
@@ -527,6 +508,15 @@ function setFontToStandard(rPr) {
   }
   if (rPr['a:ea'] && rPr['a:ea']['@_typeface'] && rPr['a:ea']['@_typeface'] !== '微软雅黑') {
     rPr['a:ea']['@_typeface'] = '微软雅黑';
+    changed = true;
+  }
+  // R008 must override inherited fonts as well, so write explicit Latin and East Asian fonts.
+  if (!rPr['a:latin'] || rPr['a:latin']['@_typeface'] !== '微软雅黑') {
+    rPr['a:latin'] = { ...(rPr['a:latin'] || {}), '@_typeface': '微软雅黑' };
+    changed = true;
+  }
+  if (!rPr['a:ea'] || rPr['a:ea']['@_typeface'] !== '微软雅黑') {
+    rPr['a:ea'] = { ...(rPr['a:ea'] || {}), '@_typeface': '微软雅黑' };
     changed = true;
   }
   return changed;

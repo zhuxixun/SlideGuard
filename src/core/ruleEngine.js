@@ -91,7 +91,7 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   report({ stage: 'check', progress: 0, stageName: '执行检查', current: 0, total: slideCount, issues: { s1: 0, s2: 0, s3: 0, s4: 0 } });
 
   const sWords = store.get('sensitiveWords') || [];
-  const context = { sensitiveWords: sWords, totalSlides: slideCount };
+  const context = { sensitiveWords: sWords, totalSlides: slideCount, activeRuleIds: ruleIds };
 
   for (let si = 0; si < slides.length; si++) {
     if (cancelled()) return { issues: allIssues, slideCount, duration: performance.now() - startTime, cancelled: true };

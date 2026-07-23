@@ -145,6 +145,19 @@ export function extractTexts(slideXml) {
       if (runs.length > 0) fullText += '\n';
     }
 
+    // 检查文本框级默认样式（lstStyle — 占位符/文本框的默认格式，PowerPoint 常用此层继承加粗）
+    const lstDefRPr = txBody['a:lstStyle']?.['a:defPPr']?.['a:defRPr'];
+    if (lstDefRPr) {
+      if (!fontSize && lstDefRPr['@_sz']) fontSize = parseFloat(lstDefRPr['@_sz']) / 100;
+      if (!fontName) fontName = lstDefRPr['@_typeface'] || (lstDefRPr['a:latin']?.['@_typeface']);
+      if (!bold) bold = lstDefRPr['@_b'] === '1' || lstDefRPr['@_b'] === true;
+      if (!color) {
+        const solidFill = lstDefRPr['a:solidFill'] || lstDefRPr['solidFill'];
+        const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];
+        if (srgb) color = srgb['@_val'];
+      }
+    }
+
     if (fullText.trim()) {
       texts.push({
         text: fullText.trim(),

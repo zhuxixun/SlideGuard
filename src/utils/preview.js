@@ -15,7 +15,7 @@
  * @param {Object|null} alignLine - 参考线 {dim, value} 如 {dim:'left', value:500000}
  * @returns {string} 预览 HTML
  */
-export function renderSlidePreview(slide, presInfo, previewWidth, highlightIdx, refPositions, alignLine) {
+export function renderSlidePreview(slide, presInfo, previewWidth, highlightIdx, refPositions, alignLine, highlightPos) {
   const sw = presInfo.width || 12192000;
   const sh = presInfo.height || 6858000;
   const scale = previewWidth / sw;
@@ -141,6 +141,24 @@ export function renderSlidePreview(slide, presInfo, previewWidth, highlightIdx, 
     }
   }
 
+  // 位置高亮（当 highlightIdx 未匹配到文本但 highlightPos 提供了位置时）
+  let posHighlightHtml = '';
+  if (highlightIdx < 0 && highlightPos) {
+    posHighlightHtml = `<div style="
+      position:absolute;
+      left:${Math.round(highlightPos.x * scale)}px;
+      top:${Math.round(highlightPos.y * scale)}px;
+      width:${Math.round(highlightPos.w * scale)}px;
+      height:${Math.round(highlightPos.h * scale)}px;
+      border:2px dashed #e5484d;
+      background:rgba(229,72,77,0.06);
+      border-radius:3px;
+      box-sizing:border-box;
+      pointer-events:none;
+      z-index:10;
+    " title="问题元素位置（按坐标定位）"></div>`;
+  }
+
   return `<div style="
     position:relative;
     width:${previewWidth}px;
@@ -150,7 +168,7 @@ export function renderSlidePreview(slide, presInfo, previewWidth, highlightIdx, 
     box-shadow:0 2px 8px rgba(36,53,84,0.08);
     overflow:hidden;
     margin:auto;
-  ">${textEls}${shapeEls}${lineHtml}</div>`;
+  ">${textEls}${shapeEls}${lineHtml}${posHighlightHtml}</div>`;
 }
 
 /**
@@ -192,63 +210,107 @@ export function renderThumbnail(slide, presInfo, thumbWidth, isActive) {
 }
 
 /**
- * 根据问题描述在 slide 中定位对应的文本元素
- * @returns {number} 文本元素索引，-1 表示未找到
+ * 根据问题描述在 slide 中定位对应的文本或形状元素
+ * @returns {number} 文本/形状元素索引，-1 表示未找到
  */
 export function findHighlightIndex(slide, issue) {
   if (!slide || !issue) return -1;
   const texts = slide.texts || [];
-  if (texts.length === 0) return -1;
+  const shapes = slide.shapes || [];
 
-  // 优先 shapeId 匹配
+  // 优先 shapeId 匹配（texts 和 shapes 中都有 shapeId）
   if (issue.fixData?.shapeId) {
-    const idx = texts.findIndex(t => String(t.shapeId) === String(issue.fixData.shapeId));
-    if (idx >= 0) return idx;
+    const textIdx = texts.findIndex(t => String(t.shapeId) === String(issue.fixData.shapeId));
+    if (textIdx >= 0) return textIdx;
   }
 
-  // 文本内容包含匹配
+  // 文本内容精确匹配（优先于模糊匹配）
+  if (issue.fixData?.textContent) {
+    const targetText = String(issue.fixData.textContent).trim();
+    if (targetText) {
+      const exactIdx = texts.findIndex(t => t.text && t.text.trim() === targetText);
+      if (exactIdx >= 0) return exactIdx;
+      // 宽松匹配：包含
+      const partialIdx = texts.findIndex(t => t.text && t.text.includes(targetText.slice(0, 30)));
+      if (partialIdx >= 0) return partialIdx;
+    }
+  }
+
+  // 问题描述中的文本片段匹配
   const desc = issue.desc || '';
   for (let i = 0; i < texts.length; i++) {
     const t = texts[i].text || '';
-    if (t.length > 3 && desc.includes(t.slice(0, 20))) return i;
+    if (t.length > 3 && desc.includes(t.slice(0, 20))) {
+      return i;
+    }
   }
 
   // 类型匹配 — 标题问题找标题
-  if (issue.rule === 'R009' && issue.type === '标题一致性') {
+  if (issue.rule === 'R009' && (issue.type === '标题一致性' || desc.includes('标题'))) {
     const idx = texts.findIndex(t => t.isTitle);
     if (idx >= 0) return idx;
   }
 
-  // 字体匹配
+  // 字体匹配（R004：找使用了该非标准字体的文本）
   if (issue.rule === 'R004') {
-    const fontName = issue.actual?.replace('字体：', '')?.trim();
+    const fontMatch = issue.actual?.match(/字体：(.+?)$/);
+    const fontName = fontMatch ? fontMatch[1].trim() : null;
     if (fontName) {
       const idx = texts.findIndex(t => t.fontName === fontName);
       if (idx >= 0) return idx;
     }
   }
 
-  // 对齐问题（R007）：按位置匹配
+  // 对齐问题（R007）：按位置匹配 texts
   if (issue.rule === 'R007' && issue.actual) {
     const ptMatch = issue.actual.match(/(\d+(?:\.\d+)?)\s*pt/);
     if (ptMatch) {
-      const targetPt = parseFloat(ptMatch[1]);
-      const targetEmu = targetPt * 12700;
+      const targetEmu = parseFloat(ptMatch[1]) * 12700;
       const tolerance = 3 * 12700;
-      // 从 actual 判断维度
       const dim = issue.alignDim || (issue.actual.includes('left') ? 'left' : issue.actual.includes('top') ? 'top' : null);
-      if (dim === 'left' || dim === 'right') {
+      if (dim === 'left' || dim === 'right' || dim === 'hCenter') {
         const idx = texts.findIndex(t => Math.abs(t.x - targetEmu) <= tolerance);
         if (idx >= 0) return idx;
-        // 如果没匹配到 text，检查形状的 x
-      } else if (dim === 'top' || dim === 'bottom') {
+      } else if (dim === 'top' || dim === 'bottom' || dim === 'vCenter') {
         const idx = texts.findIndex(t => Math.abs(t.y - targetEmu) <= tolerance);
         if (idx >= 0) return idx;
       }
     }
   }
 
+  // 最后：按 fixData 中的位置匹配
+  if (issue.fixData?.x != null && issue.fixData?.y != null) {
+    const fx = issue.fixData.x;
+    const fy = issue.fixData.y;
+    const tolerance = 3 * 12700;
+    const textIdx = texts.findIndex(t => Math.abs(t.x - fx) <= tolerance && Math.abs(t.y - fy) <= tolerance);
+    if (textIdx >= 0) return textIdx;
+  }
+
   return -1;
+}
+
+/**
+ * 获取当前问题在 slide 中的位置高亮区域（用于非文本元素高亮）
+ * 返回 {x, y, w, h} 或 null
+ */
+export function getHighlightPosition(slide, issue) {
+  if (!slide || !issue) return null;
+  // 优先使用 fixData 中的位置信息
+  if (issue.fixData?.x != null && issue.fixData?.y != null) {
+    return {
+      x: issue.fixData.x,
+      y: issue.fixData.y,
+      w: issue.fixData.w || 100000,
+      h: issue.fixData.h || 50000,
+    };
+  }
+  // 对齐问题的参考位置
+  if (issue.rule === 'R007' && issue.refPositions && issue.refPositions.length > 0) {
+    // 取第一个偏离的参考位置（通常是该问题元素的附近区域）
+    return null; // 对齐问题已有 refPositions + alignLine 可视化
+  }
+  return null;
 }
 
 /* ── 辅助函数 ── */

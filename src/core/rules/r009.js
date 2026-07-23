@@ -308,12 +308,15 @@ function checkPosition(allSlides, presInfo) {
     const avgX = cluster.indices.reduce((s, i) => s + xVals[i], 0) / cluster.length;
     for (const t of titlePositions) {
       if (Math.abs(t.x - avgX) > tolerance) {
+        // 找到该页的标题文本对象，获取 shapeId
+        const slide = allSlides.find(s => s.page === t.page);
+        const titleText = slide?.texts.find(tx => tx.isTitle);
         issues.push({
           rule: 'R009',
           type: '标题一致性',
           level: 's3',
           page: t.page,
-          object: `标题占位符`,
+          object: '标题占位符',
           desc: `第 ${t.page} 页标题位置与主流参考线不一致`,
           detail: `标题左侧位置 ${Math.round(t.x / 12700)}pt，主流参考线 ${Math.round(avgX / 12700)}pt，偏差 ${Math.round(Math.abs(t.x - avgX) / 12700)}pt`,
           actual: `左侧位置：${Math.round(t.x / 12700)}pt`,
@@ -323,6 +326,13 @@ function checkPosition(allSlides, presInfo) {
           suggestion: `建议将标题左侧对齐至 ${Math.round(avgX / 12700)}pt`,
           fixable: true,
           status: '待处理',
+          fixData: titleText ? {
+            page: t.page - 1,
+            shapeId: titleText.shapeId,
+            textContent: titleText.text,
+            x: titleText.x,
+            y: titleText.y,
+          } : {},
         });
       }
     }

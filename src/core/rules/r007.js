@@ -156,6 +156,16 @@ function checkAlignment(elems, issues, page, direction) {
             refPositions: refPositions.slice(0, 6),
             alignDim: dim,
             alignValue: Math.round(avg),
+            // 修复引擎匹配：提供位置信息做备用匹配
+            fixData: {
+              page: page - 1,
+              x: Math.round(e.x),
+              y: Math.round(e.y),
+              w: Math.round(e.w),
+              h: Math.round(e.h),
+              shapeId: e.shapeId || null,
+              textContent: e.text || null,
+            },
           });
         }
       }

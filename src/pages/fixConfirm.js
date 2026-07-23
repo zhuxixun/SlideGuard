@@ -118,6 +118,8 @@ export function afterRenderFixConfirm() {
           },
           issues: verifyResult.issues,
           pptxData: result.buffer, // 更新缓存，后续修复基于新文件
+          slidePreviews: verifyResult.slides || [],
+          presInfo: verifyResult.presInfo || { width: 12192000, height: 6858000 },
           hasScanResult: true,
         });
       } else {

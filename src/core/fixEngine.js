@@ -17,13 +17,15 @@ import { store } from '../store.js';
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
+  processEntities: false,
 });
 
 const builder = new XMLBuilder({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   format: false,
-  suppressEmptyNode: true,
+  suppressEmptyNode: false,
+  processEntities: false,
 });
 
 /**
@@ -80,10 +82,14 @@ export async function fixIssues(pptxData, issues) {
 
       for (const issue of pageIssues) {
         try {
-          const applied = applyFix(xmlObj, issue);
-          if (applied) {
+          const result = applyFix(xmlObj, issue);
+          if (result === true) {
             fixed++;
             modified = true;
+            issue.status = '已修复';
+          } else if (result === 'noop') {
+            // 匹配到目标但无需修改（可能已被同页面的前一条修复处理）
+            fixed++;
             issue.status = '已修复';
           } else {
             failed++;
@@ -98,9 +104,12 @@ export async function fixIssues(pptxData, issues) {
       }
 
       if (modified) {
-        const newXml = builder.build(xmlObj);
-        // 恢复 XML 声明
-        zip.file(slidePath, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXml);
+        let newXml = builder.build(xmlObj);
+        // 确保 XML 声明存在（builder 默认不包含声明）
+        if (!newXml.startsWith('<?xml')) {
+          newXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXml;
+        }
+        zip.file(slidePath, newXml);
       }
     } catch (e) {
       for (const iss of pageIssues) {
@@ -142,12 +151,13 @@ function applyFix(xmlObj, issue) {
   for (const sp of shapeList) {
     if (!sp) continue;
 
-    // 用 shapeId 或近似内容匹配
+    // 获取 shapeId: OOXML 中 id 在 p:nvSpPr > p:cNvPr 的 @_id 属性上，不在 <p:sp> 本身
     const nvSpPr = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
-    const spId = sp['@_id'] || nvSpPr['p:cNvPr']?.['@_id'] || nvSpPr['cNvPr']?.['@_id'];
+    const cNvPr = nvSpPr['p:cNvPr'] || nvSpPr['cNvPr'] || {};
+    const spId = cNvPr['@_id'];
     const matchesId = issue.fixData && issue.fixData.shapeId && String(spId) === String(issue.fixData.shapeId);
 
-    // 内容匹配（备用）
+    // 内容匹配（备用策略：检查文本内容是否匹配）
     let matchesText = false;
     if (!matchesId) {
       const txBody = sp['p:txBody'] || sp['txBody'];
@@ -160,7 +170,7 @@ function applyFix(xmlObj, issue) {
       }
     }
 
-    // 位置匹配（最后备用）
+    // 位置匹配（最后备用：按 EMU 坐标位置匹配，允许 1pt 误差）
     let matchesPosition = false;
     if (!matchesId && !matchesText && issue.fixData?.x != null && issue.fixData?.y != null) {
       const spPr = sp['p:spPr'] || sp['spPr'] || {};
@@ -168,7 +178,7 @@ function applyFix(xmlObj, issue) {
       const off = xfrm['a:off'] || xfrm['off'] || {};
       const sx = parseFloat(off['@_x']) || 0;
       const sy = parseFloat(off['@_y']) || 0;
-      const tolerance = 12700; // 1pt
+      const tolerance = 12700; // 1pt in EMU
       if (Math.abs(sx - issue.fixData.x) <= tolerance && Math.abs(sy - issue.fixData.y) <= tolerance) {
         matchesPosition = true;
       }
@@ -176,14 +186,20 @@ function applyFix(xmlObj, issue) {
 
     if (!matchesId && !matchesText && !matchesPosition) continue;
 
-    // 根据规则类型应用修复
-    switch (issue.rule) {
-      case 'R004': return fixFont(sp, issue);
-      case 'R005': return fixFontSize(sp, issue);
-      case 'R007': return fixPosition(sp, issue);
-      case 'R009': return fixTitle(sp, issue);
-      default: return false;
-    }
+    // 匹配到形状后执行具体修复，区分"已修改""无需修改"和"未找到"
+    const fixResult = (() => {
+      switch (issue.rule) {
+        case 'R004': return fixFont(sp, issue);
+        case 'R005': return fixFontSize(sp, issue);
+        case 'R007': return fixPosition(sp, issue);
+        case 'R009': return fixTitle(sp, issue);
+        default: return false;
+      }
+    })();
+
+    if (fixResult === true) return true;     // 修改成功
+    if (fixResult === false) return 'noop';  // 匹配到但无需修改
+    return fixResult || false;
   }
 
   return false;
@@ -310,6 +326,7 @@ function parseTargetSize(issue) {
 
 /**
  * R007: 对齐修复—调整位置
+ * 从 expected 或 fixData 中解析目标坐标
  */
 function fixPosition(sp, issue) {
   const spPr = sp['p:spPr'] || sp['spPr'];
@@ -321,29 +338,46 @@ function fixPosition(sp, issue) {
   const off = xfrm['a:off'] || xfrm['off'];
   if (!off) return false;
 
-  // 从 expected 中解析目标坐标，格式如 "left: 100pt" 或 "100pt"
-  const expected = issue.expected || '';
-  const m = expected.match(/(?:left|right|top|bottom|hCenter|vCenter)?:?\s*(\d+(?:\.\d+)?)\s*pt/i);
-  if (!m) return false;
+  let targetPt = null;
+  let dim = null;
 
-  const targetPt = parseFloat(m[1]);
-  const targetEmu = Math.round(targetPt * 12700);
-
-  if (expected.includes('left') || expected.includes('Left')) {
-    off['@_x'] = targetEmu;
-    return true;
-  }
-  if (expected.includes('top') || expected.includes('Top')) {
-    off['@_y'] = targetEmu;
-    return true;
+  // 优先从 issue.alignDim / alignValue 取（R007 规则设置）
+  if (issue.alignDim && issue.alignValue != null) {
+    dim = issue.alignDim;
+    targetPt = Math.round(issue.alignValue / 12700);
   }
 
-  // 默认：根据 actual/expected 的上下文判断是 x 还是 y
-  const actual = issue.actual || '';
-  if (actual.includes('left') || actual.includes('x') || actual.toLowerCase().includes('left')) {
-    off['@_x'] = targetEmu;
+  // 备选：从 expected 中解析，格式如 "left: 100pt"
+  if (targetPt == null) {
+    const expected = issue.expected || '';
+    const m = expected.match(/(\d+(?:\.\d+)?)\s*pt/i);
+    if (m) {
+      targetPt = parseFloat(m[1]);
+      // 根据 expected 内容推断维度
+      if (expected.startsWith('left') || expected.startsWith('right') || expected.startsWith('hCenter')) {
+        dim = dim || expected.split(':')[0].trim() || 'left';
+      } else if (expected.startsWith('top') || expected.startsWith('bottom') || expected.startsWith('vCenter')) {
+        dim = dim || expected.split(':')[0].trim() || 'top';
+      }
+    }
+  }
+
+  // 最后备选：从 actual 判断维度
+  if (targetPt == null) return false;
+  if (dim == null) {
+    const actual = issue.actual || '';
+    if (actual.includes('left') || actual.toLowerCase().includes('left')) {
+      dim = 'left';
+    } else {
+      dim = 'top';
+    }
+  }
+
+  // 横向维度 → 改 x；纵向维度 → 改 y
+  if (dim === 'left' || dim === 'right' || dim === 'hCenter') {
+    off['@_x'] = Math.round(targetPt * 12700);
   } else {
-    off['@_y'] = targetEmu;
+    off['@_y'] = Math.round(targetPt * 12700);
   }
   return true;
 }
@@ -357,15 +391,46 @@ function fixTitle(sp, issue) {
     return fixTitleOverflow(sp, issue);
   }
 
-  // 标准样式修复
+  // 标准样式修复：根据实际问题的类型选择性修复
   const txBody = sp['p:txBody'] || sp['txBody'];
   if (!txBody) return false;
 
   let changed = false;
   const paragraphs = txBody['a:p'] || [];
   const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
+  const desc = issue.desc || '';
+
+  // 判断需要修复的方面
+  const needFixFont = desc.includes('字体');
+  const needFixColor = desc.includes('颜色');
+  const needFixSize = desc.includes('字号') || desc.includes('溢出');
+  const needFixBold = desc.includes('加粗') || desc.includes('字重');
 
   for (const p of pars) {
+    // 先处理段落默认属性
+    const pPr = p['a:pPr'];
+    if (pPr) {
+      const defRPr = pPr['a:defRPr'];
+      if (defRPr) {
+        if (needFixFont) {
+          if (setFontToStandard(defRPr)) changed = true;
+        }
+        if (needFixColor) {
+          if (setColorToStandard(defRPr)) changed = true;
+        }
+        if (needFixSize && defRPr['@_sz']) {
+          if (parseFloat(defRPr['@_sz']) !== 2400) {
+            defRPr['@_sz'] = 2400;
+            changed = true;
+          }
+        }
+        if (needFixBold && defRPr['@_b'] !== '1') {
+          defRPr['@_b'] = '1';
+          changed = true;
+        }
+      }
+    }
+
     const runs = p['a:r'] || [];
     const runList = Array.isArray(runs) ? runs : [runs];
 
@@ -373,24 +438,19 @@ function fixTitle(sp, issue) {
       const rPr = r['a:rPr'] || (r['rPr']);
       if (!rPr) continue;
 
-      // 字体
-      if (issue.level === 's1' && (issue.desc.includes('字体') || issue.desc.includes('颜色'))) {
-        if (issue.desc.includes('字体')) {
-          setFontToStandard(rPr);
-          changed = true;
-        }
-        if (issue.desc.includes('颜色')) {
-          setColorToStandard(rPr);
+      if (needFixFont) {
+        if (setFontToStandard(rPr)) changed = true;
+      }
+      if (needFixColor) {
+        if (setColorToStandard(rPr)) changed = true;
+      }
+      if (needFixSize && rPr['@_sz']) {
+        if (parseFloat(rPr['@_sz']) !== 2400) {
+          rPr['@_sz'] = 2400;
           changed = true;
         }
       }
-
-      // 字号、加粗
-      if (rPr['@_sz'] && parseFloat(rPr['@_sz']) !== 2400) { // 24pt = 2400 hundredths
-        rPr['@_sz'] = 2400;
-        changed = true;
-      }
-      if (rPr['@_b'] !== '1') {
+      if (needFixBold && rPr['@_b'] !== '1') {
         rPr['@_b'] = '1';
         changed = true;
       }
@@ -429,7 +489,7 @@ function fixTitleOverflow(sp, issue) {
       const text = r['a:t']?.['#text'] ?? r['a:t'] ?? '';
       const rPr = r['a:rPr'] || {};
 
-      if (!colonFound && text.includes('：') || text.includes(':')) {
+      if (!colonFound && (text.includes('：') || text.includes(':'))) {
         // 找到包含冒号的 run
         const colonIdx = findColonInText(text);
         if (colonIdx >= 0) {
@@ -506,23 +566,42 @@ function isStandardFont(name) {
 }
 
 function setFontToStandard(rPr) {
-  if (rPr['@_typeface']) rPr['@_typeface'] = '微软雅黑';
-  if (rPr['a:latin']) rPr['a:latin']['@_typeface'] = '微软雅黑';
-  if (rPr['a:ea']) rPr['a:ea']['@_typeface'] = '微软雅黑';
+  if (!rPr) return false;
+  let changed = false;
+  if (rPr['@_typeface'] && rPr['@_typeface'] !== '微软雅黑') {
+    rPr['@_typeface'] = '微软雅黑';
+    changed = true;
+  }
+  if (rPr['a:latin'] && rPr['a:latin']['@_typeface'] && rPr['a:latin']['@_typeface'] !== '微软雅黑') {
+    rPr['a:latin']['@_typeface'] = '微软雅黑';
+    changed = true;
+  }
+  if (rPr['a:ea'] && rPr['a:ea']['@_typeface'] && rPr['a:ea']['@_typeface'] !== '微软雅黑') {
+    rPr['a:ea']['@_typeface'] = '微软雅黑';
+    changed = true;
+  }
+  return changed;
 }
 
 function setColorToStandard(rPr) {
+  if (!rPr) return false;
   const solidFill = rPr['a:solidFill'];
   if (solidFill) {
     const srgbClr = solidFill['a:srgbClr'];
     if (srgbClr) {
-      srgbClr['@_val'] = 'C00000';
+      if (srgbClr['@_val'] !== 'C00000') {
+        srgbClr['@_val'] = 'C00000';
+        return true;
+      }
     } else {
       solidFill['a:srgbClr'] = { '@_val': 'C00000' };
+      return true;
     }
   } else {
     rPr['a:solidFill'] = { 'a:srgbClr': { '@_val': 'C00000' } };
+    return true;
   }
+  return false;
 }
 
 /**

@@ -52,7 +52,7 @@ export function renderIssueList(state) {
               return `<tr style="cursor:pointer" onclick="window._ilClick(${origIdx})">
                 <td><input type="checkbox" class="il-checkbox" data-idx="${origIdx}" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();window._ilToggle(${origIdx})"></td>
                 <td>${x.page}</td>
-                <td>${x.type}${x.rule ? ' (' + x.rule + ')' : ''}</td>
+                <td>${x.type}</td>
                 <td><span class="badge ${x.level}">${x.level.toUpperCase()}</span></td>
                 <td style="${x.status === '已忽略' ? 'text-decoration:line-through;color:var(--muted)' : ''}">${x.desc}</td>
                 <td>${x.fixable ? '是' : '否'}</td>
@@ -157,7 +157,7 @@ function refreshIssueList() {
 
   // 更新标题副文本
   const headingMuted = document.querySelector('.heading .muted');
-  if (headingMuted) headingMuted.textContent = '共 ' + issues.length + ' 个问题，当前筛选 ' + filtered.length + ' 个';
+  if (headingMuted) headingMuted.textContent = '共 ' + issues.length + ' 个，当前筛选 ' + filtered.length + ' 个';
 
   // 更新表格体
   const tbody = document.querySelector('.table tbody');
@@ -170,7 +170,7 @@ function refreshIssueList() {
           return `<tr style="cursor:pointer" onclick="window._ilClick(${origIdx})">
             <td><input type="checkbox" class="il-checkbox" data-idx="${origIdx}" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();window._ilToggle(${origIdx})"></td>
             <td>${x.page}</td>
-            <td>${x.type}${x.rule ? ' (' + x.rule + ')' : ''}</td>
+            <td>${x.type}</td>
             <td><span class="badge ${x.level}">${x.level.toUpperCase()}</span></td>
             <td style="${x.status === '已忽略' ? 'text-decoration:line-through;color:var(--muted)' : ''}">${x.desc}</td>
             <td>${x.fixable ? '是' : '否'}</td>

@@ -16,8 +16,10 @@
 | `04b-scan-result-overview.html` | 扫描结果 | 结果概览 |
 | `04c-issue-list.html` | 扫描结果 | 问题列表 |
 | `04a-scan-result-empty.html` | 扫描结果 | 空状态（无扫描历史） |
-| `05-issue-detail.html` | 问题详情 | 问题详情与定位 |
-| `05a-issue-detail-empty.html` | 问题详情 | 空状态（无扫描历史） |
+| `06-issue-detail.html` | 问题详情 | 可自动修复的问题详情与定位 |
+| `06a-issue-detail-empty.html` | 问题详情 | 空状态（无扫描历史） |
+| `06b-issue-detail-manual.html` | 问题详情 | 需手动处理 |
+| `06c-issue-detail-unlocated.html` | 问题详情 | 预览无法定位具体对象 |
 | `06-fix-confirmation.html` | 修复 | 修复确认 |
 | `06a-fix-empty.html` | 修复 | 空状态（无扫描历史） |
 | `07-fix-result.html` | 修复结果 | 修复完成 |

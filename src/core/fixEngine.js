@@ -18,6 +18,7 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   processEntities: false,
+  parseNumbers: false,
 });
 
 const builder = new XMLBuilder({

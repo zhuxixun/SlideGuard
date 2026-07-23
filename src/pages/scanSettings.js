@@ -25,13 +25,12 @@ export function renderScanSettings(state) {
     {n:'空白页面检查',d:'检测疑似空白页面'},
     {n:'页面外元素检查',d:'检测画布外残留元素'},
     {n:'字体一致性检查',d:'检查非标准字体 · 可自动修复'},
-    {n:'文本溢出检查',d:'检查文字被截断或超出画布'},
     {n:'标题一致性检查',d:'检查标题样式与位置 · 可自动修复'},
     {n:'敏感及残留文本检查',d:'检测敏感词库中的词条'},
   ];
   const quickHTML = `<div id="panel-quick" class="rules-panel" style="display:${active==='quick'?'block':'none'}">
     <div class="card rules" style="grid-template-columns:1fr">
-      <div class="rule-header">快速检查将执行以下 6 项核心规则（固定，不可调整）</div>
+      <div class="rule-header">快速检查将执行以下 5 项核心规则（固定，不可调整）</div>
       ${quickItems.map(x => `<div class="rule">${x.n}<span class="muted" style="margin-left:12px">${x.d}</span></div>`).join('')}
       <div class="rule" style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--muted)">不执行：元素对齐、文字安全边距</div>
       <div class="rule" style="color:var(--muted)">规则版本：builtin-rules-v1.0（只读）</div>
@@ -41,7 +40,7 @@ export function renderScanSettings(state) {
   // Standard check rules
   const stdGroups = [
     {g:'文档基础健康',items:[{n:'空白页面检查',d:'检测疑似空白页面'},{n:'页面外元素检查',d:'检测画布外残留元素'}]},
-    {g:'文本规范',items:[{n:'字体一致性检查',d:'非标准字体 · 可自动修复'},{n:'文本溢出检查',d:'文字被截断或超出画布'},{n:'敏感及残留文本检查',d:'检测敏感词库词条'}]},
+    {g:'文本规范',items:[{n:'字体一致性检查',d:'非标准字体 · 可自动修复'},{n:'敏感及残留文本检查',d:'检测敏感词库词条'}]},
     {g:'版面布局',items:[{n:'元素对齐检查',d:'对齐偏差 · 可自动修复'},{n:'文字安全边距检查',d:'文字距边缘过近'}]},
     {g:'跨页一致性',items:[{n:'标题一致性检查',d:'标题样式与位置 · 可自动修复'}]},
   ];
@@ -61,7 +60,6 @@ export function renderScanSettings(state) {
     {n:'空白页面检查',d:'检测疑似空白页面',f:false},
     {n:'页面外元素检查',d:'检测画布外残留元素',f:false},
     {n:'字体一致性检查',d:'非标准字体 · 可自动修复',f:true},
-    {n:'文本溢出检查',d:'文字被截断或超出画布',f:false},
     {n:'元素对齐检查',d:'对齐偏差 · 可自动修复',f:true},
     {n:'文字安全边距检查',d:'文字距页面边缘过近',f:false},
     {n:'标题一致性检查',d:'标题样式与位置 · 可自动修复',f:true},
@@ -172,7 +170,7 @@ window.startScan = function(mode) {
   let rules = [];
   if (mode === 'custom') {
     const cbs = document.querySelectorAll('.custom-ck:checked');
-    const idMap = { 0:'R002',1:'R003',2:'R004',3:'R005',4:'R006',5:'R007',6:'R008',7:'R009' };
+    const idMap = { 0:'R002',1:'R003',2:'R004',3:'R006',4:'R007',5:'R008',6:'R009' };
     // 按自定义列表顺序提取 rule ID
     document.querySelectorAll('.custom-ck').forEach((cb, idx) => {
       if (cb.checked && idMap[idx]) rules.push(idMap[idx]);
@@ -183,8 +181,8 @@ window.startScan = function(mode) {
     }
   } else {
     const ruleMap = {
-      quick: ['R002','R003','R004','R005','R008','R009'],
-      standard: ['R002','R003','R004','R005','R006','R007','R008','R009'],
+      quick: ['R002','R003','R004','R008','R009'],
+      standard: ['R002','R003','R004','R006','R007','R008','R009'],
     };
     rules = ruleMap[mode] || [];
   }

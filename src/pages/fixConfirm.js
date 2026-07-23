@@ -93,7 +93,7 @@ export function afterRenderFixConfirm() {
         const downloadedName = downloadFixedFile(result.buffer, fileName);
 
         // 对修复后文件做标准扫描验证
-        const verifyResult = await runScan(result.buffer, ['R002','R003','R004','R005','R006','R007','R008','R009'], {
+        const verifyResult = await runScan(result.buffer, ['R002','R003','R004','R006','R007','R008','R009'], {
           onProgress: () => {},
           isCancelled: () => false,
         });

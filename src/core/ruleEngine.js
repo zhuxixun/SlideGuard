@@ -16,7 +16,6 @@ import { store } from '../store.js';
 import { check as checkR002, rule as ruleR002 } from './rules/r002.js';
 import { check as checkR003, rule as ruleR003 } from './rules/r003.js';
 import { check as checkR004, rule as ruleR004 } from './rules/r004.js';
-import { check as checkR005, rule as ruleR005 } from './rules/r005.js';
 import { check as checkR006, rule as ruleR006 } from './rules/r006.js';
 import { check as checkR007, rule as ruleR007 } from './rules/r007.js';
 import { check as checkR008, checkCrossPage as checkR008Cross, rule as ruleR008 } from './rules/r008.js';
@@ -26,7 +25,6 @@ const ruleRegistry = {
   R002: { ...ruleR002, check: checkR002 },
   R003: { ...ruleR003, check: checkR003 },
   R004: { ...ruleR004, check: checkR004 },
-  R005: { ...ruleR005, check: checkR005 },
   R006: { ...ruleR006, check: checkR006 },
   R007: { ...ruleR007, check: checkR007 },
   R008: { ...ruleR008, check: checkR008, checkCrossPage: checkR008Cross },

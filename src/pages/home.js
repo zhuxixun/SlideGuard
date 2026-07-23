@@ -80,7 +80,7 @@ window.clearFile = function() {
     scanCancelled: false, issues: [], selectedIssues: new Set(),
     currentIssueIndex: -1, hasScanResult: false,
     slidePreviews: [], presInfo: { width: 12192000, height: 6858000 },
-    r010EmptyWarning: false,
+    r009EmptyWarning: false,
   });
   rerenderHome();
 };

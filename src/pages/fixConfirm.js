@@ -10,7 +10,7 @@ export function renderFixConfirm(state) {
   const selected = state.selectedIssues || new Set();
   const fixable = issues.filter((x, i) => selected.has(i) && x.fixable);
   const pages = new Set(fixable.map(x => x.page));
-  const typeMap = { R004: '字体替换', R005: '字号调整', R007: '位置调整', R009: '样式修复' };
+  const typeMap = { R004: '字体替换', R006: '位置调整', R008: '样式修复' };
 
   return `
     <div class="heading">
@@ -27,7 +27,7 @@ export function renderFixConfirm(state) {
     <div class="card empty-state" style="margin-top:40px;padding:60px;text-align:center">
       <div class="empty-icon">◇</div>
       <h2>选中项中无可修复的问题</h2>
-      <p class="muted">只有 R004（字体）、R005（字号）、R007（对齐）、R009（标题样式）问题可自动修复</p>
+      <p class="muted">只有 R004（字体）、R006（对齐）、R008（标题样式）问题可自动修复</p>
       <button class="btn primary" onclick="location.hash='issue-list'">返回问题列表</button>
     </div>` : `
     <div class="grid fix-grid">
@@ -93,7 +93,7 @@ export function afterRenderFixConfirm() {
         const downloadedName = downloadFixedFile(result.buffer, fileName);
 
         // 对修复后文件做标准扫描验证
-        const verifyResult = await runScan(result.buffer, ['R002','R003','R004','R005','R006','R007','R008','R009','R010'], {
+        const verifyResult = await runScan(result.buffer, ['R002','R003','R004','R005','R006','R007','R008','R009'], {
           onProgress: () => {},
           isCancelled: () => false,
         });

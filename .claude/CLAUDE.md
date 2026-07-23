@@ -52,7 +52,7 @@ Each page exports `render*(state)` and optionally `afterRender*(state)`:
 
 **`ruleEngine.js`** — Orchestrates scanning: parse ZIP → load all slides → run page-level rules → run cross-page rules → summarize. Each rule checks one dimension. Progress callbacks drive the scanning page UI.
 
-**`fixEngine.js`** — Modifies slide XML in memory (not the original file). Supports font replacement (R004), font size adjustment (R005), position alignment (R007), title style fix (R009). Outputs new ZIP and triggers browser download.
+**`fixEngine.js`** — Modifies slide XML in memory (not the original file). Supports font replacement (R004), position alignment (R007), title style fix (R009). Outputs new ZIP and triggers browser download.
 
 **`rules/`** — One file per rule (R002–R010). Each exports `{ id, name, level, pageLevel, crossPage }` and `check(slide, presInfo, context)` / `checkCrossPage(slides, presInfo)`.
 
@@ -68,7 +68,7 @@ Each page exports `render*(state)` and optionally `afterRender*(state)`:
 ## Key Conventions
 
 - **Issue format**: Each issue is `{ page, type, level: 's1'|'s2'|'s3'|'s4', desc, rule, fixable, actual, expected, source, reason, suggestion, status, object, fixData, sensitiveWord?, charRange? }`
-- **Fixable rules only**: R004 (font), R005 (font size), R007 (alignment), R009 (title style). All others are detection-only.
+- **Fixable rules only**: R004 (font), R007 (alignment), R009 (title style). All others are detection-only.
 - **Sidebar**: Always visible, all entries shown. Empty states guide the user instead of hiding entries.
 - **Privacy**: Zero network requests. All computation in browser sandbox. Sensitive words stored in LocalStorage/IndexedDB.
 - **File safety**: Original file is never modified. Fixed files are downloaded via browser's "Save As" dialog with filename pattern `*_SlideGuard_fixed_yyyymmdd_HHmmss.pptx`.

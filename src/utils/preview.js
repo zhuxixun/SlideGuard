@@ -246,7 +246,7 @@ export function findHighlightIndex(slide, issue) {
   }
 
   // 类型匹配 — 标题问题找标题
-  if (issue.rule === 'R009' && (issue.type === '标题一致性' || desc.includes('标题'))) {
+  if (issue.rule === 'R008' && (issue.type === '标题一致性' || desc.includes('标题'))) {
     const idx = texts.findIndex(t => t.isTitle);
     if (idx >= 0) return idx;
   }
@@ -262,7 +262,7 @@ export function findHighlightIndex(slide, issue) {
   }
 
   // 对齐问题（R007）：按位置匹配 texts
-  if (issue.rule === 'R007' && issue.actual) {
+  if (issue.rule === 'R006' && issue.actual) {
     const ptMatch = issue.actual.match(/(\d+(?:\.\d+)?)\s*pt/);
     if (ptMatch) {
       const targetEmu = parseFloat(ptMatch[1]) * 12700;
@@ -306,7 +306,7 @@ export function getHighlightPosition(slide, issue) {
     };
   }
   // 对齐问题的参考位置
-  if (issue.rule === 'R007' && issue.refPositions && issue.refPositions.length > 0) {
+  if (issue.rule === 'R006' && issue.refPositions && issue.refPositions.length > 0) {
     // 取第一个偏离的参考位置（通常是该问题元素的附近区域）
     return null; // 对齐问题已有 refPositions + alignLine 可视化
   }

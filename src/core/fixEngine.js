@@ -2,7 +2,7 @@
  * 自动修复引擎
  *
  * 在内存中修改 PPTX ZIP 中的 XML，生成新的 .pptx 并通过浏览器下载。
- * 支持修复规则：R004（字体）、R005（字号）、R007（对齐）、R009（标题样式）
+ * 支持修复规则：R004（字体）、R007（对齐）、R009（标题样式）
  *
  * 流程：
  *   1. 从 ArrayBuffer 加载 ZIP
@@ -190,9 +190,8 @@ function applyFix(xmlObj, issue) {
     const fixResult = (() => {
       switch (issue.rule) {
         case 'R004': return fixFont(sp, issue);
-        case 'R005': return fixFontSize(sp, issue);
-        case 'R007': return fixPosition(sp, issue);
-        case 'R009': return fixTitle(sp, issue);
+        case 'R006': return fixPosition(sp, issue);
+        case 'R008': return fixTitle(sp, issue);
         default: return false;
       }
     })();
@@ -271,62 +270,6 @@ function fixFont(sp, issue) {
   }
 
   return changed;
-}
-
-/**
- * R005: 调整字号
- */
-function fixFontSize(sp, issue) {
-  const targetSize = parseTargetSize(issue);
-  if (!targetSize) return false;
-
-  const txBody = sp['p:txBody'] || sp['txBody'];
-  if (!txBody) return false;
-
-  const paragraphs = txBody['a:p'] || [];
-  const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
-  let changed = false;
-  const targetEmu = targetSize * 100; // hundredths of a point
-
-  for (const p of pars) {
-    let hasRunLevelSz = false;
-    const runs = p['a:r'] || [];
-    const runList = Array.isArray(runs) ? runs : [runs];
-    for (const r of runList) {
-      const rPr = r['a:rPr'];
-      if (!rPr) continue;
-      if (rPr['@_sz']) {
-        hasRunLevelSz = true;
-        const current = parseFloat(rPr['@_sz']);
-        if (Math.abs(current - targetEmu) > 2 * 100) { // 偏差 > 2pt
-          rPr['@_sz'] = targetEmu;
-          changed = true;
-        }
-      }
-    }
-
-    // 段落默认属性（defRPr）：只在 run 级无显式字号时才生效
-    if (!hasRunLevelSz) {
-      const pPr = p['a:pPr'] || (() => { p['a:pPr'] = {}; return p['a:pPr']; })();
-      const defRPr = pPr['a:defRPr'] || (() => { pPr['a:defRPr'] = {}; return pPr['a:defRPr']; })();
-      if (parseFloat(defRPr['@_sz'] || 0) !== targetEmu) {
-        defRPr['@_sz'] = targetEmu;
-        changed = true;
-      }
-    }
-  }
-
-  return changed;
-}
-
-function parseTargetSize(issue) {
-  // 从 expected 字段提取，如 "14pt" 或 "14"
-  const m = String(issue.expected || '').match(/(\d+(?:\.\d+)?)\s*pt/);
-  if (m) return parseFloat(m[1]);
-  // 从 suggestion 提取
-  const m2 = String(issue.suggestion || '').match(/(\d+(?:\.\d+)?)\s*pt/);
-  if (m2) return parseFloat(m2[1]);
-  return null;
 }
 
 /**

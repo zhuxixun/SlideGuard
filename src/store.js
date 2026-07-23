@@ -65,7 +65,7 @@ export const store = new Store({
   // 页面预览数据（扫描后提取）
   slidePreviews: [],    // [{page, texts: [...], shapes: [...], loadError}]
   presInfo: { width: 12192000, height: 6858000 },
-  r010EmptyWarning: false,
+  r009EmptyWarning: false,
 
   // UI 状态
   hasScanResult: false,

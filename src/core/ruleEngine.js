@@ -16,23 +16,21 @@ import { store } from '../store.js';
 import { check as checkR002, rule as ruleR002 } from './rules/r002.js';
 import { check as checkR003, rule as ruleR003 } from './rules/r003.js';
 import { check as checkR004, rule as ruleR004 } from './rules/r004.js';
-import { check as checkR005, checkCrossPage as checkR005Cross, rule as ruleR005 } from './rules/r005.js';
+import { check as checkR005, rule as ruleR005 } from './rules/r005.js';
 import { check as checkR006, rule as ruleR006 } from './rules/r006.js';
 import { check as checkR007, rule as ruleR007 } from './rules/r007.js';
-import { check as checkR008, rule as ruleR008 } from './rules/r008.js';
-import { check as checkR009, checkCrossPage as checkR009Cross, rule as ruleR009 } from './rules/r009.js';
-import { check as checkR010, rule as ruleR010 } from './rules/r010.js';
+import { check as checkR008, checkCrossPage as checkR008Cross, rule as ruleR008 } from './rules/r008.js';
+import { check as checkR009, rule as ruleR009 } from './rules/r009.js';
 
 const ruleRegistry = {
   R002: { ...ruleR002, check: checkR002 },
   R003: { ...ruleR003, check: checkR003 },
   R004: { ...ruleR004, check: checkR004 },
-  R005: { ...ruleR005, check: checkR005, checkCrossPage: checkR005Cross },
+  R005: { ...ruleR005, check: checkR005 },
   R006: { ...ruleR006, check: checkR006 },
   R007: { ...ruleR007, check: checkR007 },
-  R008: { ...ruleR008, check: checkR008 },
-  R009: { ...ruleR009, check: checkR009, checkCrossPage: checkR009Cross },
-  R010: { ...ruleR010, check: checkR010 },
+  R008: { ...ruleR008, check: checkR008, checkCrossPage: checkR008Cross },
+  R009: { ...ruleR009, check: checkR009 },
 };
 
 /**
@@ -131,7 +129,7 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   }
 
   // 检测 R010 空词库警告
-  const r010EmptyWarning = ruleIds.includes('R010') && (!sWords || sWords.length === 0);
+  const r009EmptyWarning = ruleIds.includes('R009') && (!sWords || sWords.length === 0);
 
   // --- 完成 ---
   const duration = performance.now() - startTime;
@@ -150,7 +148,7 @@ export async function runScan(pptxData, ruleIds, options = {}) {
       loadError: s.loadError || null,
     })),
     presInfo: { width: presInfo.width, height: presInfo.height },
-    r010EmptyWarning,
+    r009EmptyWarning,
   };
 
   function abortResult() {

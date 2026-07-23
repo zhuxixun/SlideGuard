@@ -24,14 +24,14 @@ export function renderScanning(state) {
   // 规则名称列表
   const ruleNames = {
     R002: '空白页面检查', R003: '页面外元素检查', R004: '字体一致性检查',
-    R005: '字号一致性检查', R006: '文本溢出检查', R007: '元素对齐检查',
+    R005: '文本溢出检查', R006: '元素对齐检查',
     R008: '文字安全边距检查', R009: '标题一致性检查', R010: '敏感及残留文本检查',
   };
   const activeRules = state.scanRules || [];
   // 从 store 获取显示用顺序列表
   const displayRules = {
-    quick: ['R002', 'R003', 'R004', 'R006', 'R009', 'R010'],
-    standard: ['R002', 'R003', 'R004', 'R005', 'R006', 'R007', 'R008', 'R009', 'R010'],
+    quick: ['R002', 'R003', 'R004', 'R005', 'R008', 'R009'],
+    standard: ['R002', 'R003', 'R004', 'R005', 'R006', 'R007', 'R008', 'R009'],
   };
   const orderedRules = displayRules[state.scanMode] || activeRules;
 
@@ -123,7 +123,7 @@ async function executeScan(pptxData, ruleIds) {
         hasScanResult: true,
         slidePreviews: result.slides || [],
         presInfo: result.presInfo || { width: 12192000, height: 6858000 },
-        r010EmptyWarning: result.r010EmptyWarning || false,
+        r009EmptyWarning: result.r009EmptyWarning || false,
         scanProgress: { stage: 'summary', progress: 0, stageName: '已取消', issues: countByLevel(result.issues), done: true },
       });
     } else {
@@ -135,7 +135,7 @@ async function executeScan(pptxData, ruleIds) {
         hasScanResult: true,
         slidePreviews: result.slides || [],
         presInfo: result.presInfo || { width: 12192000, height: 6858000 },
-        r010EmptyWarning: result.r010EmptyWarning || false,
+        r009EmptyWarning: result.r009EmptyWarning || false,
         scanResult: { slideCount: result.slideCount, duration: result.duration, totalIssues: result.issues.length, completedAt: new Date().toLocaleString('zh-CN') },
         scanProgress: { stage: 'summary', progress: 100, stageName: '扫描完成', issues: countByLevel(result.issues), done: true },
       });

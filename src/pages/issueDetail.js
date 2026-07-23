@@ -29,8 +29,8 @@ export function renderIssueDetail(state) {
   const hlPos = hlIdx < 0 ? getHighlightPosition(curSlide, issue) : null;
 
   // 对齐问题的参考数据
-  const refPos = (issue.rule === 'R007' && issue.refPositions) ? issue.refPositions : null;
-  const alignLine = (issue.rule === 'R007' && issue.alignDim && issue.alignValue != null)
+  const refPos = (issue.rule === 'R006' && issue.refPositions) ? issue.refPositions : null;
+  const alignLine = (issue.rule === 'R006' && issue.alignDim && issue.alignValue != null)
     ? { dim: issue.alignDim, value: issue.alignValue } : null;
 
   // 预览 HTML

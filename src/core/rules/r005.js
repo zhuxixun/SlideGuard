@@ -1,142 +1,168 @@
 /**
- * R005 字号一致性检查
+ * R005 文本溢出检查
  *
- * 正文/列表 < 14pt → S3；注释/页脚/图表标签/表格辅助文字 < 10pt → S3。
- * 同层级字号不一致且形成主流值时，偏离 > 2pt → S3。
- * 标题字号由 R009 负责。
+ * 使用 Canvas API 测量实际文本宽度，结合文本框尺寸判断是否溢出。
+ * 支持：字体缺失检测、容差 2pt、S2/S3 分级。
  */
 export const rule = {
   id: 'R005',
-  name: '字号一致性检查',
-  level: 's3',
-  fixable: true,
+  name: '文本溢出检查',
+  level: 's2',
+  fixable: false,
   pageLevel: true,
-  crossPage: true,   // 跨页检查字号一致性
+  crossPage: false,
 };
 
-const MIN_BODY_SIZE = 14;   // pt
-const MIN_NOTE_SIZE = 10;   // pt
+// 单位转换
+const EMU_PER_PT = 12700;
+const PX_PER_EMU = 96 / 914400;   // 1 EMU → px at 96dpi
+const LINE_SPACING = 1.4;
 
 /**
- * 判断文本类型
+ * 使用 Canvas 测量单行文本宽度（px）
  */
-function guessTextType(t) {
-  if (t.phType === 'title' || t.phType === 'ctrTitle') return 'title';
-  if (t.phType === 'ftr' || t.phType === 'sldNum') return 'note';
-  if ((t.fontSize || 12) <= 10) return 'note';
-  if ((t.fontSize || 12) >= 18) return 'title';
-  return 'body';
+let _canvas = null;
+function measureTextWidth(text, fontSizePt, fontFamily, bold) {
+  if (!_canvas) {
+    _canvas = document.createElement('canvas');
+    _canvas.width = 1;
+    _canvas.height = 1;
+  }
+  const ctx = _canvas.getContext('2d');
+  const weight = bold ? 'bold ' : '';
+  // 使用后备字体确保测量始终有效
+  ctx.font = `${weight}${fontSizePt}pt "${fontFamily}", "Microsoft YaHei", "Segoe UI", sans-serif`;
+  return ctx.measureText(text).width;
 }
 
 /**
- * 页面级检查：字号过小
+ * 检查字体是否可用
  */
-function checkTooSmall(texts, page) {
+function isFontAvailable(fontName) {
+  try {
+    return document.fonts && document.fonts.check(`12pt "${fontName}"`);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 计算文本在指定框宽下的排版高度（px）
+ * 对 CJK 文本按字符宽度换行，对含空格的文本按单词换行
+ */
+function calcLayoutHeight(text, fontSizePt, fontFamily, bold, boxWidthPx) {
+  if (!text || !fontSizePt || !boxWidthPx || boxWidthPx <= 0) return 0;
+
+  // 行高
+  const lineHeightPx = fontSizePt * 1.333 * LINE_SPACING;
+
+  // 如果只有一行宽度，快速判断
+  const singleLineWidth = measureTextWidth(text, fontSizePt, fontFamily, bold);
+  if (singleLineWidth <= boxWidthPx) return lineHeightPx;
+
+  // 多行：逐词/逐字换行
+  // CJK 文本每个字符宽度相近，按字符切分
+  // 含空格的文本按单词切分
+  const hasSpaces = /\s/.test(text);
+  const tokens = hasSpaces ? text.split(/(\s+)/) : text.split('');
+
+  let lines = 1;
+  let currentLineWidth = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token) continue;
+
+    const tokenWidth = measureTextWidth(token, fontSizePt, fontFamily, bold);
+
+    if (currentLineWidth + tokenWidth > boxWidthPx) {
+      // 换行
+      lines++;
+      currentLineWidth = tokenWidth;
+    } else {
+      currentLineWidth += tokenWidth;
+    }
+  }
+
+  return lines * lineHeightPx;
+}
+
+/**
+ * @param {Object} slide - { texts, page, ... }
+ * @param {Object} presInfo - { width, height }
+ */
+export function check(slide, presInfo) {
   const issues = [];
+  const { texts, page } = slide;
+
   for (const t of texts) {
-    const type = guessTextType(t);
-    if (type === 'title') continue; // R009
-    const minSize = type === 'note' ? MIN_NOTE_SIZE : MIN_BODY_SIZE;
-    const sz = t.fontSize || 12;
-    if (sz < minSize) {
+    const text = t.text || '';
+    if (!text.trim() || !t.fontSize) continue;
+
+    const boxWEmu = t.w || 0;
+    const boxHEmu = t.h || 0;
+    if (boxWEmu <= 0 || boxHEmu <= 0) continue;
+
+    // 转换为 px
+    const boxWPx = boxWEmu * PX_PER_EMU;
+    const boxHPx = boxHEmu * PX_PER_EMU;
+    const tolerancePx = 2 * 1.333; // 2pt → px
+
+    // 检查字体是否可用
+    const fontName = t.fontName || 'Microsoft YaHei';
+    const fontAvailable = isFontAvailable(fontName);
+
+    if (!fontAvailable && fontName !== 'Microsoft YaHei' && fontName !== '微软雅黑') {
+      // 字体缺失 → 标记风险，不判定溢出
       issues.push({
         rule: 'R005',
-        type: '字号过小',
+        type: '文本溢出',
         level: 's3',
         page,
-        object: `文本框（${sz}pt）`,
-        desc: `第 ${page} 页存在字号过小（${sz}pt${type === 'note' ? '，注释类' : ''}）`,
-        detail: `文本"${(t.text || '').slice(0, 30)}"字号为 ${sz}pt，低于${type === 'note' ? '注释类最小字号 10pt' : '正文最小字号 14pt'}`,
-        actual: `${sz}pt`,
-        expected: type === 'note' ? '≥ 10pt' : '≥ 14pt',
+        object: `文本框`,
+        desc: `第 ${page} 页存在字体缺失风险（${fontName}）`,
+        detail: `文本"${text.slice(0, 40)}"使用了字体"${fontName}"，该字体在系统中未找到，排版测量不可靠`,
+        actual: `字体：${fontName}（缺失）`,
+        expected: `应使用可用字体`,
         source: '内置规则集 builtin-rules-v1.0',
-        reason: `文本被识别为${type === 'note' ? '注释/页脚' : '正文'}类型，字号 ${sz}pt 低于最小要求`,
-        suggestion: type === 'note' ? '建议调整至 10pt 或更大' : '建议调整至 14pt 或更大',
-        fixable: true,
+        reason: `字体"${fontName}"缺失，浏览器使用替代字体渲染，实际排版可能与 PPT 设计不一致`,
+        suggestion: '建议将字体替换为微软雅黑以确保排版一致，或确认目标环境中已安装该字体',
+        fixable: false,
         status: '待处理',
-        fixData: {
-          page: page - 1,
-          shapeId: t.shapeId,
-          textContent: t.text,
-          x: t.x,
-          y: t.y,
-          w: t.w,
-          h: t.h,
-        },
+        fontMissing: true,
       });
+      continue;
     }
-  }
-  return issues;
-}
 
-/**
- * 跨页检查：同层级字号一致性
- * 简化实现：收集正文类型字号，检查是否有主流值，偏离的报告
- */
-function checkInconsistency(allSlides, presInfo) {
-  const issues = [];
-  // 收集所有正文文本的字号
-  const bodySizes = [];
-  for (const slide of allSlides) {
-    for (const t of slide.texts) {
-      if (guessTextType(t) !== 'body') continue;
-      if (!t.fontSize) continue;
-      bodySizes.push({ fontSize: t.fontSize, page: slide.page, text: t.text, shapeId: t.shapeId, x: t.x, y: t.y, w: t.w, h: t.h });
-    }
-  }
+    // 使用 Canvas 精确测量排版高度
+    const neededPx = calcLayoutHeight(text, t.fontSize, fontName, t.bold, boxWPx);
 
-  if (bodySizes.length < 3) return issues; // 样本不足
+    if (neededPx > boxHPx + tolerancePx) {
+      const overflowPx = neededPx - boxHPx;
+      const overflowPt = overflowPx / 1.333;
+      const severity = overflowPt > boxHEmu / EMU_PER_PT * 0.5 ? 's2' : 's3';
 
-  // 找主流值
-  const freq = {};
-  for (const b of bodySizes) {
-    const key = Math.round(b.fontSize);
-    freq[key] = (freq[key] || 0) + 1;
-  }
-
-  const entries = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-  const [mainSize, mainCount] = [parseFloat(entries[0][0]), entries[0][1]];
-  const total = bodySizes.length;
-
-  if (mainCount / total < 0.7) return issues; // 未形成主流
-
-  for (const b of bodySizes) {
-    if (Math.abs(b.fontSize - mainSize) > 2) {
       issues.push({
         rule: 'R005',
-        type: '字号不一致',
-        level: 's3',
-        page: b.page,
-        object: `文本框（${b.fontSize}pt）`,
-        desc: `第 ${b.page} 页正文字号 ${b.fontSize}pt 与主流值 ${mainSize}pt 偏差超过 2pt`,
-        detail: `文本"${(b.text || '').slice(0, 30)}"字号 ${b.fontSize}pt，主流值为 ${mainSize}pt（${Math.round(mainCount / total * 100)}% 样本使用此字号）`,
-        actual: `${b.fontSize}pt`,
-        expected: `${mainSize}pt`,
+        type: '文本溢出',
+        level: severity,
+        page,
+        object: `文本框`,
+        desc: `第 ${page} 页文本超出文本框${severity === 's2' ? '（超出超过 50%）' : ''}`,
+        detail: `文本"${text.slice(0, 50)}"使用 ${t.fontSize}pt ${fontName}，估算排版高度 ${neededPx.toFixed(0)}px（${(neededPx / 1.333).toFixed(0)}pt），文本框高度 ${(boxHPx / 1.333).toFixed(0)}pt`,
+        actual: `排版需要 ${(neededPx / 1.333).toFixed(0)}pt`,
+        expected: `文本框 ${(boxHPx / 1.333).toFixed(0)}pt 应足够容纳`,
         source: '内置规则集 builtin-rules-v1.0',
-        reason: `同类正文样本 ${total} 个，${Math.round(mainCount / total * 100)}% 使用 ${mainSize}pt，当前 ${b.fontSize}pt 偏差 ${Math.round(b.fontSize - mainSize)}pt`,
-        suggestion: `建议统一为 ${mainSize}pt`,
-        fixable: true,
+        reason: `文本在 ${t.fontSize}pt 下排版高度超出文本框 ${overflowPt.toFixed(0)}pt`,
+        suggestion: severity === 's2'
+          ? '关键文字被裁断或完全不可见，请立即缩小字号或增大文本框'
+          : '建议适当缩小字号、精简文本或增大文本框',
+        fixable: false,
         status: '待处理',
-        fixData: {
-          page: b.page - 1,
-          shapeId: b.shapeId,
-          textContent: b.text,
-          x: b.x,
-          y: b.y,
-          w: b.w,
-          h: b.h,
-        },
+        overflowPt: Math.round(overflowPt),
       });
     }
   }
 
   return issues;
-}
-
-export function check(slide, presInfo) {
-  return checkTooSmall(slide.texts, slide.page);
-}
-
-export function checkCrossPage(allSlides, presInfo) {
-  return checkInconsistency(allSlides, presInfo);
 }

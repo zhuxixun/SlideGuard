@@ -20,6 +20,24 @@ const parser = new XMLParser({
 });
 
 /**
+ * Read an OOXML bold value without confusing an absent attribute (inherit)
+ * with an explicit false value.
+ * @returns {boolean|null} null means that this level does not specify bold.
+ */
+function readBold(rPr) {
+  if (!rPr || !Object.prototype.hasOwnProperty.call(rPr, '@_b')) return null;
+  const value = rPr['@_b'];
+  return value === '1' || value === 1 || value === true || value === 'true' || value === 'on';
+}
+
+function mergeBold(current, value) {
+  // A title is compliant only when every resolved run is bold.
+  if (current === false || value === false) return false;
+  if (current === true || value === true) return true;
+  return null;
+}
+
+/**
  * 解析 PPTX 文件，提取基本元数据
  * @param {ArrayBuffer} buffer
  * @returns {Promise<{slideCount, width, height, slideNames, zip}>}
@@ -119,7 +137,10 @@ export function extractTexts(slideXml) {
     let bold = null; // null=继承未知 true=加粗 false=明确不加粗
     let color = null;
 
+    const lstDefRPr = txBody['a:lstStyle']?.['a:defPPr']?.['a:defRPr'];
     for (const p of pars) {
+      const pPr = p['a:pPr'] || p['pPr'] || {};
+      const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
       const runs = p['a:r'] || [];
       const runList = Array.isArray(runs) ? runs : [runs];
       for (const r of runList) {
@@ -129,7 +150,10 @@ export function extractTexts(slideXml) {
         const rPr = r['a:rPr'] || r['rPr'] || {};
         if (!fontSize && rPr['@_sz']) fontSize = parseFloat(rPr['@_sz']) / 100;
         if (!fontName) fontName = rPr['@_typeface'] || (rPr['a:latin']?.['@_typeface']);
-        if (!bold) bold = rPr['@_b'] === '1' || rPr['@_b'] === true;
+        bold = mergeBold(
+          bold,
+          readBold(rPr) ?? readBold(defRPr) ?? readBold(lstDefRPr),
+        );
         if (!color) {
           const solidFill = rPr['a:solidFill'] || rPr['solidFill'];
           const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];
@@ -137,21 +161,16 @@ export function extractTexts(slideXml) {
         }
       }
       // 检查段落默认属性（defRPr）— 独立处理每项属性
-      const pPr = p['a:pPr'] || p['pPr'] || {};
-      const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
       if (!fontSize && defRPr['@_sz']) fontSize = parseFloat(defRPr['@_sz']) / 100;
       if (!fontName) fontName = defRPr['@_typeface'] || (defRPr['a:latin']?.['@_typeface']);
-      if (!bold) bold = defRPr['@_b'] === '1' || defRPr['@_b'] === true;
       // 段落换行
       if (runs.length > 0) fullText += '\n';
     }
 
     // 检查文本框级默认样式（lstStyle — 占位符/文本框的默认格式，PowerPoint 常用此层继承加粗）
-    const lstDefRPr = txBody['a:lstStyle']?.['a:defPPr']?.['a:defRPr'];
     if (lstDefRPr) {
       if (!fontSize && lstDefRPr['@_sz']) fontSize = parseFloat(lstDefRPr['@_sz']) / 100;
       if (!fontName) fontName = lstDefRPr['@_typeface'] || (lstDefRPr['a:latin']?.['@_typeface']);
-      if (!bold) bold = lstDefRPr['@_b'] === '1' || lstDefRPr['@_b'] === true;
       if (!color) {
         const solidFill = lstDefRPr['a:solidFill'] || lstDefRPr['solidFill'];
         const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];

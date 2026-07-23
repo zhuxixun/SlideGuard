@@ -22,9 +22,9 @@ export function renderFixResult(state) {
       <p class="muted">${fr.fileName ? '文件已保存为新文件，原始文件保持不变' : '修复过程中出现问题，请查看下方错误信息'}</p>
       <div class="input" style="width:850px;margin:auto;text-align:center;justify-content:center">${fr.fileName || '修复未生成文件'}</div>
     </div>
-    <div class="grid fix-grid">
-      ${[['已修复', String(fixed), 'ok', false], ['未修复', String(failed), 's3', false], ['修复后新增问题', String(newCount), 's1', true]]
-        .map(x => `<div class="card stat"><span class="badge ${x[2]}">${x[0]}</span><strong>${x[3] && parseInt(x[1]) > 0 ? '<a href="#scan-result" style="color:var(--red);text-decoration:underline;cursor:pointer">' + x[1] + '</a>' : x[1]}</strong></div>`).join('')}
+    <div class="grid fix-result-grid">
+      ${[['已修复', String(fixed), 'ok'], ['未修复', String(failed), 's3']]
+        .map(x => `<div class="card stat"><span class="badge ${x[2]}">${x[0]}</span><strong>${x[1]}</strong></div>`).join('')}
     </div>
     ${errors.length > 0 ? `
     <div class="info" style="margin-bottom:18px;color:#9b5b00;border-color:#f2c879;background:#fff9e8">

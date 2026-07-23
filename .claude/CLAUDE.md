@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **⚠️ 重要：每次修改 `src/` 下的代码后，都必须重新编译。** 打开 `dist/index.html` 看到的是打包后的代码，不编译则修改不生效。
 
+**⚠️ 用户说"提交一下"默认包含 commit + push，不需要等用户再说一次"推送"。**
+
 ```bash
 npm run build      # Bundle with esbuild → dist/app.bundle.js
 npm run watch      # Watch mode rebuild (自动监听变化)
@@ -70,6 +72,7 @@ Each page exports `render*(state)` and optionally `afterRender*(state)`:
 - **Sidebar**: Always visible, all entries shown. Empty states guide the user instead of hiding entries.
 - **Privacy**: Zero network requests. All computation in browser sandbox. Sensitive words stored in LocalStorage/IndexedDB.
 - **File safety**: Original file is never modified. Fixed files are downloaded via browser's "Save As" dialog with filename pattern `*_SlideGuard_fixed_yyyymmdd_HHmmss.pptx`.
+- **设计稿先行**: 所有涉及 UI 界面设计的修改，必须先改 `design/ui/source/` 下的设计稿（`mockups.js`/`mockups.css`），经用户认可后才能修改 `src/` 下的实现代码。
 
 ## Common Tasks
 

@@ -470,6 +470,7 @@ select.input:hover { border-color: #b0c4ff; }
 
 /* ── Fix ── */
 .fix-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 18px; }
+.fix-result-grid { grid-template-columns: repeat(2, 1fr); margin-bottom: 18px; }
 .path { padding: 16px; margin-top: 18px; }
 .success { text-align: center; margin: 12px 0 26px; }
 .success .tick { font-size: 58px; color: var(--green); }

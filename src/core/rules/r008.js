@@ -248,8 +248,8 @@ function checkStyle(slide, presInfo) {
       });
     }
 
-    // 字重 → S3
-    if (!t.bold) {
+    // 字重 → S3（仅当明确检测到未加粗时报告，继承/未知时不报）
+    if (t.bold === false) {
       issues.push({
         rule: 'R008',
         type: '标题一致性',

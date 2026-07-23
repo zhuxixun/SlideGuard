@@ -116,7 +116,7 @@ export function extractTexts(slideXml) {
     let fullText = '';
     let fontSize = null;
     let fontName = null;
-    let bold = false;
+    let bold = null; // null=继承未知 true=加粗 false=明确不加粗
     let color = null;
 
     for (const p of pars) {

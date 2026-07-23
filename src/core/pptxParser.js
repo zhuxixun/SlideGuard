@@ -135,14 +135,12 @@ export function extractTexts(slideXml) {
           if (srgb) color = srgb['@_val'];
         }
       }
-      // 如果 run 级别未找到，检查段落默认属性（defRPr）
-      if (!fontSize || !fontName) {
-        const pPr = p['a:pPr'] || p['pPr'] || {};
-        const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
-        if (!fontSize && defRPr['@_sz']) fontSize = parseFloat(defRPr['@_sz']) / 100;
-        if (!fontName) fontName = defRPr['@_typeface'] || (defRPr['a:latin']?.['@_typeface']);
-        if (!bold && defRPr['@_b']) bold = defRPr['@_b'] === '1' || defRPr['@_b'] === true;
-      }
+      // 检查段落默认属性（defRPr）— 独立处理每项属性
+      const pPr = p['a:pPr'] || p['pPr'] || {};
+      const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
+      if (!fontSize && defRPr['@_sz']) fontSize = parseFloat(defRPr['@_sz']) / 100;
+      if (!fontName) fontName = defRPr['@_typeface'] || (defRPr['a:latin']?.['@_typeface']);
+      if (!bold) bold = defRPr['@_b'] === '1' || defRPr['@_b'] === true;
       // 段落换行
       if (runs.length > 0) fullText += '\n';
     }

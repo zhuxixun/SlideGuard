@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **⚠️ 用户说"提交一下"默认包含 commit + push，不需要等用户再说一次"推送"。**
 
+**⚠️ git 提交时，必须根据本次改动内容认真填写 commit message，不许偷懒用占位符或敷衍的描述。**
+
 ```bash
 npm run build      # Bundle with esbuild → dist/app.bundle.js
 npm run watch      # Watch mode rebuild (自动监听变化)

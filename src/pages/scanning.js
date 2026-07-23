@@ -25,7 +25,7 @@ export function renderScanning(state) {
   const ruleNames = {
     R002: '空白页面检查', R003: '页面外元素检查', R004: '字体一致性检查',
     R006: '元素对齐检查',
-    R008: '文字安全边距检查', R009: '标题一致性检查', R010: '敏感及残留文本检查',
+    R008: '标题一致性检查', R009: '敏感及残留文本检查',
   };
   const activeRules = state.scanRules || [];
   // 从 store 获取显示用顺序列表

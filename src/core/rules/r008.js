@@ -1,10 +1,10 @@
 /**
  * R008 标题一致性检查
  *
- * 只检查 PowerPoint 标题占位符（isTitle）。
- * 样式：微软雅黑、24pt、加粗、RGB(192,0,0)。
- * 非标准字体 → S1（同时遵循 R004）；颜色不一致 → S1；字号/字重/位置不一致 → S3。
- * 支持自动修复。
+ * 只检查 PowerPoint 标题占位符（isTitle / ctrTitle）。
+ * 样式：微软雅黑、24pt、加粗、RGB(192,0,0)，并与版式标题参考线（左侧）对齐。
+ * 非标准字体/标题颜色不一致 → S1；字号/字重/位置偏移 → S3。
+ * 支持自动修复（字体、字号、加粗、颜色、超长标题冒号分割）。
  */
 export const rule = {
   id: 'R008',
@@ -43,7 +43,8 @@ function checkTitleOverflow(t, page) {
   const issues = [];
   const text = t.text || '';
   if (!text.trim() || !t.w || !t.h) return issues;
-  if (t.fontSize && t.fontSize !== 24) return issues; // 非24pt直接由R009报告字号不一致
+  // 仅当标题使用标准 24pt（或未明确指定）时才检查溢出
+  if (t.fontSize && t.fontSize !== 24) return issues;
 
   const boxW = t.w;
   const boxH = t.h;
@@ -60,7 +61,6 @@ function checkTitleOverflow(t, page) {
     const afterColon = text.slice(colonIdx + 1);
     if (afterColon.trim()) {
       // 计算冒号后文字在剩余空间中单行不溢出的最小字号
-      // 剩余宽度 = 文本框宽度
       const minSizeAfter = calcMinSingleLineSize(afterColon, boxW);
       const targetSize = Math.max(14, Math.ceil(minSizeAfter));
       const willFit = minSizeAfter <= 24 && targetSize >= 14;
@@ -81,7 +81,6 @@ function checkTitleOverflow(t, page) {
           suggestion: `冒号前保持 24pt，冒号后缩小至 ${targetSize}pt`,
           fixable: true,
           status: '待处理',
-          // 修复数据
           fixData: {
             type: 'title-overflow',
             page: page - 1,
@@ -103,10 +102,10 @@ function checkTitleOverflow(t, page) {
           object: '标题占位符',
           desc: `第 ${page} 页标题在 24pt 下溢出，即使缩小至 14pt 仍无法容纳`,
           detail: `标题"${text.slice(0, 40)}"包含冒号，但冒号后文字缩小到 14pt 仍超出文本框`,
-          actual: `冒号后文字在 14pt 下仍溢出`,
+          actual: '冒号后文字在 14pt 下仍溢出',
           expected: '排版不溢出',
           source: '内置规则集 builtin-rules-v1.0',
-          reason: `冒号后文字即使缩小到最小 14pt 仍无法在单行内完整显示`,
+          reason: '冒号后文字即使缩小到最小 14pt 仍无法在单行内完整显示',
           suggestion: '请人工精简冒号后文字或调整文本框大小',
           fixable: false,
           status: '待处理',
@@ -151,11 +150,42 @@ function findFirstColon(text) {
  */
 function calcMinSingleLineSize(text, boxWidthEmu) {
   if (!text || !boxWidthEmu) return 24;
-  // 文本总宽度 = 字符数 × 字号 × 0.85 × 12700
-  // 需要 text.length * size * 12700 * 0.85 <= boxWidthEmu
-  // size <= boxWidthEmu / (text.length * 12700 * 0.85)
   const size = boxWidthEmu / (text.length * 12700 * 0.85);
   return Math.min(24, Math.max(8, size));
+}
+
+/**
+ * 页面级：检查标题位置是否与版式参考线（左侧）对齐
+ * PRD: 优先采用当前版式标题占位符的左侧位置；偏差超过3pt → S3
+ */
+function checkLayoutAlignment(t, slide) {
+  const issues = [];
+  const layoutPos = slide.layoutTitlePos;
+  if (!layoutPos) return issues;
+
+  const tolerance = 3 * 12700; // 3pt
+  const dx = Math.abs(t.x - layoutPos.x);
+
+  if (dx > tolerance) {
+    issues.push({
+      rule: 'R008',
+      type: '标题一致性',
+      level: 's3',  // PRD: 位置偏差 → S3
+      page: slide.page,
+      object: '标题占位符',
+      desc: `第 ${slide.page} 页标题左侧位置与版式参考线不一致`,
+      detail: `标题左侧偏差 ${Math.round(dx / 12700)}pt（当前 ${Math.round(t.x / 12700)}pt，版式参考线 ${Math.round(layoutPos.x / 12700)}pt）`,
+      actual: `左侧位置：${Math.round(t.x / 12700)}pt`,
+      expected: `左侧对齐版式参考线 ${Math.round(layoutPos.x / 12700)}pt`,
+      source: '内置规则集 builtin-rules-v1.0',
+      reason: `标题左侧 ${Math.round(t.x / 12700)}pt 偏离版式参考线 ${Math.round(layoutPos.x / 12700)}pt 超过 ${Math.round(tolerance / 12700)}pt`,
+      suggestion: `建议将标题左侧对齐至 ${Math.round(layoutPos.x / 12700)}pt`,
+      fixable: false,
+      status: '待处理',
+    });
+  }
+
+  return issues;
 }
 
 /**
@@ -169,7 +199,7 @@ function checkStyle(slide, presInfo) {
   for (const t of titles) {
     if (!t.text.trim()) continue;
 
-    // 字体 → S1（或由 R004 覆盖）
+    // 字体 → S1（同时遵循 R004）
     const font = (t.fontName || '').trim();
     if (font && !STANDARD_FONTS.includes(font)) {
       issues.push({
@@ -177,11 +207,11 @@ function checkStyle(slide, presInfo) {
         type: '标题一致性',
         level: 's1',
         page,
-        object: `标题占位符`,
+        object: '标题占位符',
         desc: `第 ${page} 页标题字体"${font}"不是标准字体`,
         detail: `标题"${(t.text || '').slice(0, 30)}"使用非标准字体"${font}"，应为"微软雅黑"`,
         actual: `字体：${font || '未指定'}`,
-        expected: `字体：微软雅黑`,
+        expected: '字体：微软雅黑',
         source: '内置规则集 builtin-rules-v1.0',
         reason: '标题字体不符合规范，应使用微软雅黑',
         suggestion: '自动替换为微软雅黑',
@@ -203,7 +233,7 @@ function checkStyle(slide, presInfo) {
         type: '标题一致性',
         level: 's1',
         page,
-        object: `标题占位符`,
+        object: '标题占位符',
         desc: `第 ${page} 页标题颜色 #${t.color} 与标准颜色不一致`,
         detail: `标题"${(t.text || '').slice(0, 30)}"颜色为 #${t.color}，应为 #C00000 (RGB 192,0,0)`,
         actual: `颜色：#${t.color}`,
@@ -222,14 +252,14 @@ function checkStyle(slide, presInfo) {
       });
     }
 
-    // 字号 → S3
+    // 字号 → S3（PRD: 标题字号不一致报告为 S3）
     if (t.fontSize && t.fontSize !== EXPECTED.fontSize) {
       issues.push({
         rule: 'R008',
         type: '标题一致性',
         level: 's3',
         page,
-        object: `标题占位符`,
+        object: '标题占位符',
         desc: `第 ${page} 页标题字号 ${Math.round(t.fontSize)}pt 与标准 24pt 不一致`,
         detail: `标题"${(t.text || '').slice(0, 30)}"字号为 ${Math.round(t.fontSize)}pt，标准为 24pt`,
         actual: `${Math.round(t.fontSize)}pt`,
@@ -248,14 +278,14 @@ function checkStyle(slide, presInfo) {
       });
     }
 
-    // 字重 → S3（仅当明确检测到未加粗时报告，继承/未知时不报）
+    // 字重 → S3（PRD: 标题字重不一致报告为 S3）
     if (t.bold === false) {
       issues.push({
         rule: 'R008',
         type: '标题一致性',
         level: 's3',
         page,
-        object: `标题占位符`,
+        object: '标题占位符',
         desc: `第 ${page} 页标题未加粗`,
         detail: `标题"${(t.text || '').slice(0, 30)}"字重为普通，应为加粗`,
         actual: '字重：普通',
@@ -274,6 +304,10 @@ function checkStyle(slide, presInfo) {
       });
     }
 
+    // 与版式标题参考线对齐（左侧位置）
+    const alignIssues = checkLayoutAlignment(t, slide);
+    issues.push(...alignIssues);
+
     // 超长标题溢出检查（在 24pt 下是否超出文本框）
     const overflowIssues = checkTitleOverflow(t, page);
     issues.push(...overflowIssues);
@@ -283,56 +317,59 @@ function checkStyle(slide, presInfo) {
 }
 
 /**
- * 跨页级：检查标题位置一致性
+ * 跨页级：回退聚类 — 当 layoutTitlePos 不可用时，
+ * 对同一版式至少3页且≥70%标题左侧偏差≤3pt的形成参考线。
+ * PRD: 无法形成参考线时只检查文字样式，不检查位置。
  */
 function checkPosition(allSlides, presInfo) {
   const issues = [];
 
-  // 收集所有标题位置
-  const titlePositions = [];
+  // 收集每个版式的标题位置（只取缺少 layoutTitlePos 的幻灯片）
+  const layoutGroups = {};
   for (const slide of allSlides) {
-    const titles = slide.texts.filter(t => t.isTitle);
+    if (slide.layoutTitlePos) continue; // 已有 layout 参考线，跳过
+    const titles = slide.texts.filter(t => t.isTitle && t.text.trim());
+    if (titles.length === 0) continue;
+
+    // 按版式路径分组；无路径时统一归入 unknown
+    const groupKey = slide.layoutPath || 'unknown-layout';
+    if (!layoutGroups[groupKey]) layoutGroups[groupKey] = [];
     for (const t of titles) {
-      titlePositions.push({ page: slide.page, x: t.x, y: t.y });
+      layoutGroups[groupKey].push({ page: slide.page, x: t.x });
     }
   }
 
-  if (titlePositions.length < 2) return issues;
+  for (const entries of Object.values(layoutGroups)) {
+    // PRD: 至少3页
+    if (entries.length < 3) continue;
 
-  // 用 x 坐标聚类（同一版式标题应在相近 x 位置）
-  const xVals = titlePositions.map(t => t.x);
-  const tolerance = 3 * 12700;
-  const cluster = clusterValues(xVals, tolerance);
+    // PRD: ≥70% 标题左侧位置彼此偏差不超过 3pt → 形成参考线
+    const tolerance = 3 * 12700;
+    const refLine = findReferenceLine(entries, tolerance);
+    if (!refLine) continue; // 无法形成参考线，跳过位置检查
 
-  if (cluster && cluster.length >= 2) {
-    const avgX = cluster.indices.reduce((s, i) => s + xVals[i], 0) / cluster.length;
-    for (const t of titlePositions) {
-      if (Math.abs(t.x - avgX) > tolerance) {
-        // 找到该页的标题文本对象，获取 shapeId
-        const slide = allSlides.find(s => s.page === t.page);
-        const titleText = slide?.texts.find(tx => tx.isTitle);
+    // 对偏离参考线的标题生成问题
+    for (const entry of entries) {
+      if (Math.abs(entry.x - refLine) > tolerance) {
         issues.push({
           rule: 'R008',
           type: '标题一致性',
           level: 's3',
-          page: t.page,
+          page: entry.page,
           object: '标题占位符',
-          desc: `第 ${t.page} 页标题位置与主流参考线不一致`,
-          detail: `标题左侧位置 ${Math.round(t.x / 12700)}pt，主流参考线 ${Math.round(avgX / 12700)}pt，偏差 ${Math.round(Math.abs(t.x - avgX) / 12700)}pt`,
-          actual: `左侧位置：${Math.round(t.x / 12700)}pt`,
-          expected: `左侧位置：${Math.round(avgX / 12700)}pt`,
+          desc: `第 ${entry.page} 页标题左侧位置与主流参考线不一致`,
+          detail: `标题左侧 ${Math.round(entry.x / 12700)}pt，主流参考线 ${Math.round(refLine / 12700)}pt，偏差 ${Math.round(Math.abs(entry.x - refLine) / 12700)}pt`,
+          actual: `左侧位置：${Math.round(entry.x / 12700)}pt`,
+          expected: `左侧位置：${Math.round(refLine / 12700)}pt`,
           source: '内置规则集 builtin-rules-v1.0',
-          reason: `同类标题 ${titlePositions.length} 个，参考线为 ${Math.round(avgX / 12700)}pt，当前偏差 ${Math.round(Math.abs(t.x - avgX) / 12700)}pt`,
-          suggestion: `建议将标题左侧对齐至 ${Math.round(avgX / 12700)}pt`,
+          reason: `同类标题 ${entries.length} 个，参考线为 ${Math.round(refLine / 12700)}pt，当前偏差 ${Math.round(Math.abs(entry.x - refLine) / 12700)}pt`,
+          suggestion: `建议将标题左侧对齐至 ${Math.round(refLine / 12700)}pt`,
           fixable: true,
           status: '待处理',
-          fixData: titleText ? {
-            page: t.page - 1,
-            shapeId: titleText.shapeId,
-            textContent: titleText.text,
-            x: titleText.x,
-            y: titleText.y,
-          } : {},
+          fixData: {
+            page: entry.page - 1,
+            x: Math.round(refLine),
+          },
         });
       }
     }
@@ -341,21 +378,29 @@ function checkPosition(allSlides, presInfo) {
   return issues;
 }
 
-function clusterValues(vals, tolerance) {
-  const n = vals.length;
-  let best = { indices: [], length: 0 };
-  for (let i = 0; i < n; i++) {
-    const group = { indices: [i] };
-    for (let j = 0; j < n; j++) {
-      if (i !== j && Math.abs(vals[j] - vals[i]) <= tolerance) {
-        group.indices.push(j);
-      }
-    }
-    if (group.indices.length > best.length) {
-      best = group;
+/**
+ * 在位置集合中找出满足 ≥70% 样本偏差 ≤ tolerance 的参考线值。
+ * @param {Array<{x: number}>} entries
+ * @param {number} tolerance EMU
+ * @returns {number|null} 参考线值（EMU），无法形成时返回 null
+ */
+function findReferenceLine(entries, tolerance) {
+  const n = entries.length;
+  const THRESHOLD = Math.ceil(n * 0.7); // ≥70%
+
+  // 尝试每个位置作为参考线候选
+  for (const candidate of entries) {
+    const center = candidate.x;
+    const count = entries.filter(e => Math.abs(e.x - center) <= tolerance).length;
+    if (count >= THRESHOLD) {
+      // 取所有在容差内的位置的平均值作为参考线
+      const inRange = entries.filter(e => Math.abs(e.x - center) <= tolerance);
+      const avg = inRange.reduce((s, e) => s + e.x, 0) / inRange.length;
+      return avg;
     }
   }
-  return best.length >= 2 ? best : null;
+
+  return null;
 }
 
 export function check(slide, presInfo) {

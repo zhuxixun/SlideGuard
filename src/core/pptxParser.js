@@ -197,6 +197,102 @@ export function extractTexts(slideXml) {
 }
 
 /**
+ * 解析所有版式文件中的标题占位符位置
+ * @param {import('jszip')} zip
+ * @returns {Promise<Map<string, {x:number, y:number, w:number, h:number}>>} layoutPath → 标题占位符位置
+ */
+export async function extractLayoutTitlePositions(zip) {
+  const positions = new Map();
+
+  // 收集所有版式文件
+  const layoutFiles = [];
+  zip.forEach((relPath, file) => {
+    if (relPath.startsWith('ppt/slideLayouts/') && relPath.endsWith('.xml') && !file.dir) {
+      layoutFiles.push(relPath);
+    }
+  });
+
+  for (const path of layoutFiles) {
+    try {
+      const file = zip.file(path);
+      if (!file) continue;
+      const xml = await file.async('text');
+      const parsed = parser.parse(xml);
+      const sldLayout = parsed['p:sldLayout'] || parsed['sldLayout'] || parsed;
+      const cSld = sldLayout['p:cSld'] || sldLayout['cSld'];
+      if (!cSld) continue;
+      const spTree = cSld['p:spTree'] || cSld['spTree'];
+      if (!spTree) continue;
+      const shapes = spTree['p:sp'] || spTree['sp'] || [];
+      const list = Array.isArray(shapes) ? shapes : [shapes];
+
+      for (const sp of list) {
+        if (!sp) continue;
+        const nvs = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
+        const nvsPr = nvs['p:nvPr'] || nvs['nvPr'] || {};
+        const ph = nvsPr['p:ph'] || nvsPr['ph'];
+        if (!ph) continue;
+        const phType = ph['@_type'];
+        if (phType === 'title' || phType === 'ctrTitle' || phType === undefined) {
+          const spPr = sp['p:spPr'] || sp['spPr'] || {};
+          const xfrm = spPr['a:xfrm'] || spPr['xfrm'] || {};
+          const off = xfrm['a:off'] || xfrm['off'] || {};
+          const ext = xfrm['a:ext'] || xfrm['ext'] || {};
+          positions.set(path, {
+            x: parseFloat(off['@_x']) || 0,
+            y: parseFloat(off['@_y']) || 0,
+            w: parseFloat(ext['@_cx']) || 0,
+            h: parseFloat(ext['@_cy']) || 0,
+          });
+          break; // 每个版式只取第一个标题占位符
+        }
+      }
+    } catch (e) {
+      console.warn('[PptxParser] 解析版式文件失败:', path, e.message);
+    }
+  }
+
+  return positions;
+}
+
+/**
+ * 获取每张幻灯片关联的版式文件路径
+ * @param {import('jszip')} zip
+ * @param {number} slideCount
+ * @returns {Promise<Array<string|null>>} slide index → layout path (null=未找到)
+ */
+export async function getSlideLayoutMap(zip, slideCount) {
+  const map = [];
+  for (let i = 0; i < slideCount; i++) {
+    const relsPath = `ppt/slides/_rels/slide${i + 1}.xml.rels`;
+    try {
+      const relsFile = zip.file(relsPath);
+      if (!relsFile) { map.push(null); continue; }
+      const xml = await relsFile.async('text');
+      const parsed = parser.parse(xml);
+      const relationships = parsed['Relationships'] || {};
+      const relList = relationships['Relationship'];
+      const rels = Array.isArray(relList) ? relList : (relList ? [relList] : []);
+      const layoutRel = rels.find(r =>
+        r['@_Type'] && r['@_Type'].includes('slideLayout')
+      );
+      if (!layoutRel) { map.push(null); continue; }
+      // 从 rels 路径解析版式文件路径
+      // rels 文件在 ppt/slides/_rels/slideN.xml.rels
+      // Target 形如 ../slideLayouts/slideLayoutN.xml
+      // 解析为 ppt/slideLayouts/slideLayoutN.xml
+      const target = layoutRel['@_Target'];
+      const resolved = target.replace(/^\.\.\//, 'ppt/');
+      map.push(resolved);
+    } catch (e) {
+      console.warn(`[PptxParser] 解析 slide ${i + 1} rels 失败:`, e.message);
+      map.push(null);
+    }
+  }
+  return map;
+}
+
+/**
  * 提取形状位置信息
  */
 function extractPos(xfrm) {

@@ -332,7 +332,7 @@ function fixPosition(sp, issue) {
 }
 
 /**
- * R009: 标题样式修复（含超长标题冒号分割）
+ * R008: 标题样式修复（含超长标题冒号分割）
  */
 function fixTitle(sp, issue) {
   // 超长标题冒号分割修复

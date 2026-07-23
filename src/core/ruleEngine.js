@@ -9,7 +9,7 @@
  *   5. 汇总结果
  */
 import JSZip from 'jszip';
-import { parsePptx, loadSlide, extractTexts, extractShapes } from './pptxParser.js';
+import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap } from './pptxParser.js';
 import { store } from '../store.js';
 
 /* 规则注册表 */
@@ -61,6 +61,10 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   // --- 阶段 2: 加载所有幻灯片 ---
   report({ stage: 'load', progress: 0, stageName: '加载页面', issues: { s1: 0, s2: 0, s3: 0, s4: 0 } });
 
+  // 加载版式标题参考线
+  const layoutTitlePositions = await extractLayoutTitlePositions(zip);
+  const slideLayoutMap = await getSlideLayoutMap(zip, slideCount);
+
   const slides = [];
   for (let i = 0; i < slideCount; i++) {
     if (cancelled()) return abortResult();
@@ -68,7 +72,10 @@ export async function runScan(pptxData, ruleIds, options = {}) {
       const slideXml = await loadSlide(zip, i);
       const texts = extractTexts(slideXml);
       const shapes = extractShapes(slideXml);
-      slides.push({ index: i, page: i + 1, texts, shapes, hasHidden: false });
+      // 获取该幻灯片关联的版式标题占位符位置
+      const layoutPath = slideLayoutMap[i];
+      const layoutTitlePos = layoutPath ? layoutTitlePositions.get(layoutPath) : null;
+      slides.push({ index: i, page: i + 1, texts, shapes, hasHidden: false, layoutTitlePos, layoutPath });
     } catch (e) {
       console.warn('[RuleEngine] 第 ' + (i + 1) + ' 页加载失败:', e.message);
       slides.push({ index: i, page: i + 1, texts: [], shapes: [], hasHidden: false, loadError: e.message });

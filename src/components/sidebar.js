@@ -2,12 +2,13 @@
  * 侧边栏组件
  */
 export function renderSidebar(active) {
-  const items = ['首页', '扫描设置', '敏感词库', '扫描结果', '问题详情', '修复', '修复结果'];
+  const items = ['首页', '扫描设置', '敏感词库', '扫描结果', '问题列表', '问题详情', '修复', '修复结果'];
   const routes = {
     '首页': 'home',
     '扫描设置': 'scan-settings',
     '敏感词库': 'sensitive-words',
     '扫描结果': 'scan-result',
+    '问题列表': 'issue-list',
     '问题详情': 'issue-detail',
     '修复': 'fix-confirm',
     '修复结果': 'fix-result',

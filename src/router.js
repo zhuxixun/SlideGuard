@@ -19,7 +19,7 @@ const routes = {
   'sensitive-words':{ page: '敏感词库',   render: renderSensitiveWords, afterRender: afterRenderSensitiveWords },
   'scanning':       { page: '扫描结果',   render: renderScanning, afterRender: afterRenderScanning },
   'scan-result':    { page: '扫描结果',   render: renderScanResult },
-  'issue-list':     { page: '扫描结果',   render: renderIssueList, afterRender: afterRenderIssueList },
+  'issue-list':     { page: '问题列表',   render: renderIssueList, afterRender: afterRenderIssueList },
   'issue-detail':   { page: '问题详情',   render: renderIssueDetail, afterRender: afterRenderIssueDetail },
   'fix-confirm':    { page: '修复',       render: renderFixConfirm, afterRender: afterRenderFixConfirm },
   'fix-result':     { page: '修复结果',   render: renderFixResult },
@@ -27,7 +27,7 @@ const routes = {
 
 const emptyRoutes = {
   'scan-result':  { page: '扫描结果' },
-  'issue-list':   { page: '扫描结果' },
+  'issue-list':   { page: '问题列表' },
   'issue-detail': { page: '问题详情' },
   'fix-confirm':  { page: '修复' },
   'fix-result':   { page: '修复结果' },
@@ -40,12 +40,13 @@ function getRoute() {
 function renderEmptyState(pageName) {
   const msgs = {
     '扫描结果': '请先完成一次标准检查，之后才能查看扫描结果。',
+    '问题列表': '请先完成一次标准检查，之后才能查看问题列表。',
     '问题详情': '请先完成一次标准检查，之后才能查看问题详情。',
     '修复':     '请先完成一次标准检查，之后才能使用修复功能。',
     '修复结果': '请先完成一次标准检查，之后才能使用修复功能。',
   };
   document.getElementById('app').innerHTML =
-    `<div class="app"><div class="body">${renderSidebar(pageName)}<main class="main"><div class="heading"><div><h1>${pageName}</h1><div class="muted">${pageName === '扫描结果' ? '查看文件检查结果' : pageName === '问题详情' ? '查看问题详细信息' : ''}</div></div></div><div class="card empty-state"><div><div class="empty-icon">◇</div><h2>暂无可用的扫描结果</h2><p>${msgs[pageName] || '请先完成一次标准检查。'}</p><button class="btn primary" style="margin-top:24px" onclick="location.hash='scan-settings'">前往扫描设置</button></div></div></main></div></div>`;
+    `<div class="app"><div class="body">${renderSidebar(pageName)}<main class="main"><div class="heading"><div><h1>${pageName}</h1><div class="muted">${pageName === '扫描结果' ? '查看文件检查结果' : pageName === '问题详情' ? '查看问题详细信息' : pageName === '问题列表' ? '查看问题列表' : ''}</div></div></div><div class="card empty-state"><div><div class="empty-icon">◇</div><h2>暂无可用的扫描结果</h2><p>${msgs[pageName] || '请先完成一次标准检查。'}</p><button class="btn primary" style="margin-top:24px" onclick="location.hash='scan-settings'">前往扫描设置</button></div></div></main></div></div>`;
 }
 
 export function navigate(hash) {

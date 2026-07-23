@@ -22,28 +22,28 @@ export function renderScanSettings(state) {
 
   // Quick check rules
   const quickItems = [
-    {n:'空白页面检查（R002）',d:'检测疑似空白页面'},
-    {n:'页面外元素检查（R003）',d:'检测画布外残留元素'},
-    {n:'字体一致性检查（R004）',d:'检查非标准字体 · 可自动修复'},
-    {n:'文本溢出检查（R006）',d:'检查文字被截断或超出画布'},
-    {n:'标题一致性检查（R009）',d:'检查标题样式与位置 · 可自动修复'},
-    {n:'敏感及残留文本检查（R010）',d:'检测敏感词库中的词条'},
+    {n:'空白页面检查',d:'检测疑似空白页面'},
+    {n:'页面外元素检查',d:'检测画布外残留元素'},
+    {n:'字体一致性检查',d:'检查非标准字体 · 可自动修复'},
+    {n:'文本溢出检查',d:'检查文字被截断或超出画布'},
+    {n:'标题一致性检查',d:'检查标题样式与位置 · 可自动修复'},
+    {n:'敏感及残留文本检查',d:'检测敏感词库中的词条'},
   ];
   const quickHTML = `<div id="panel-quick" class="rules-panel" style="display:${active==='quick'?'block':'none'}">
     <div class="card rules" style="grid-template-columns:1fr">
       <div class="rule-header">快速检查将执行以下 6 项核心规则（固定，不可调整）</div>
       ${quickItems.map(x => `<div class="rule">${x.n}<span class="muted" style="margin-left:12px">${x.d}</span></div>`).join('')}
-      <div class="rule" style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--muted)">不执行：字号一致性（R005）、元素对齐（R007）、文字安全边距（R008）</div>
+      <div class="rule" style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--muted)">不执行：字号一致性、元素对齐、文字安全边距</div>
       <div class="rule" style="color:var(--muted)">规则版本：builtin-rules-v1.0（只读）</div>
     </div>
   </div>`;
 
   // Standard check rules
   const stdGroups = [
-    {g:'文档基础健康',items:[{n:'空白页面检查（R002）',d:'检测疑似空白页面'},{n:'页面外元素检查（R003）',d:'检测画布外残留元素'}]},
-    {g:'文本规范',items:[{n:'字体一致性检查（R004）',d:'非标准字体 · 可自动修复'},{n:'字号一致性检查（R005）',d:'字号过小及不一致 · 可自动修复'},{n:'文本溢出检查（R006）',d:'文字被截断或超出画布'},{n:'敏感及残留文本检查（R010）',d:'检测敏感词库词条'}]},
-    {g:'版面布局',items:[{n:'元素对齐检查（R007）',d:'对齐偏差 · 可自动修复'},{n:'文字安全边距检查（R008）',d:'文字距边缘过近'}]},
-    {g:'跨页一致性',items:[{n:'标题一致性检查（R009）',d:'标题样式与位置 · 可自动修复'}]},
+    {g:'文档基础健康',items:[{n:'空白页面检查',d:'检测疑似空白页面'},{n:'页面外元素检查',d:'检测画布外残留元素'}]},
+    {g:'文本规范',items:[{n:'字体一致性检查',d:'非标准字体 · 可自动修复'},{n:'字号一致性检查',d:'字号过小及不一致 · 可自动修复'},{n:'文本溢出检查',d:'文字被截断或超出画布'},{n:'敏感及残留文本检查',d:'检测敏感词库词条'}]},
+    {g:'版面布局',items:[{n:'元素对齐检查',d:'对齐偏差 · 可自动修复'},{n:'文字安全边距检查',d:'文字距边缘过近'}]},
+    {g:'跨页一致性',items:[{n:'标题一致性检查',d:'标题样式与位置 · 可自动修复'}]},
   ];
   const stdHTML = `<div id="panel-standard" class="rules-panel" style="display:${active==='standard'?'block':'none'}">
     <div class="card rules" style="grid-template-columns:1fr;padding:0">
@@ -58,15 +58,15 @@ export function renderScanSettings(state) {
 
   // Custom check rules
   const custItems = [
-    {n:'空白页面检查（R002）',d:'检测疑似空白页面',f:false},
-    {n:'页面外元素检查（R003）',d:'检测画布外残留元素',f:false},
-    {n:'字体一致性检查（R004）',d:'非标准字体 · 可自动修复',f:true},
-    {n:'字号一致性检查（R005）',d:'字号过小及不一致 · 可自动修复',f:true},
-    {n:'文本溢出检查（R006）',d:'文字被截断或超出画布',f:false},
-    {n:'元素对齐检查（R007）',d:'对齐偏差 · 可自动修复',f:true},
-    {n:'文字安全边距检查（R008）',d:'文字距页面边缘过近',f:false},
-    {n:'标题一致性检查（R009）',d:'标题样式与位置 · 可自动修复',f:true},
-    {n:'敏感及残留文本检查（R010）',d:'检测敏感词库中的词条',f:false},
+    {n:'空白页面检查',d:'检测疑似空白页面',f:false},
+    {n:'页面外元素检查',d:'检测画布外残留元素',f:false},
+    {n:'字体一致性检查',d:'非标准字体 · 可自动修复',f:true},
+    {n:'字号一致性检查',d:'字号过小及不一致 · 可自动修复',f:true},
+    {n:'文本溢出检查',d:'文字被截断或超出画布',f:false},
+    {n:'元素对齐检查',d:'对齐偏差 · 可自动修复',f:true},
+    {n:'文字安全边距检查',d:'文字距页面边缘过近',f:false},
+    {n:'标题一致性检查',d:'标题样式与位置 · 可自动修复',f:true},
+    {n:'敏感及残留文本检查',d:'检测敏感词库中的词条',f:false},
   ];
   const custHTML = `<div id="panel-custom" class="rules-panel" style="display:${active==='custom'?'block':'none'}">
     <div class="card rules" style="grid-template-columns:1fr;padding:0">

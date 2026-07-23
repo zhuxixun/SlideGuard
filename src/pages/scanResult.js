@@ -26,7 +26,7 @@ export function renderScanResult(state) {
       </div>
     </div>
     ${incomplete ? '<div class="info" style="margin-bottom:18px;color:#9b5b00;border-color:#f2c879;background:#fff9e8"><b>扫描未完成</b>　可查看已发现问题，但自动修复不可用。</div>' : ''}
-    ${r010Empty ? '<div class="info" style="margin-bottom:18px;color:#9b5b00;border-color:#f2c879;background:#fff9e8"><b>敏感词库为空</b>　敏感及残留文本检查（R010）已执行，但因词库为空未检测任何词条。未发现问题不代表无敏感内容，请前往<a href="#sensitive-words" style="color:#1f5eff;text-decoration:underline">敏感词库</a>添加词条后重新扫描。</div>' : ''}
+    ${r010Empty ? '<div class="info" style="margin-bottom:18px;color:#9b5b00;border-color:#f2c879;background:#fff9e8"><b>敏感词库为空</b>　敏感及残留文本检查已执行，但因词库为空未检测任何词条。未发现问题不代表无敏感内容，请前往<a href="#sensitive-words" style="color:#1f5eff;text-decoration:underline">敏感词库</a>添加词条后重新扫描。</div>' : ''}
     <div class="grid summary">
       ${[['S1 严重', countS1, 's1'], ['S2 高风险', countS2, 's2'], ['S3 一般', countS3, 's3'], ['S4 建议', countS4, 's4'], ['涉及页面', pages, ''], ['可自动修复', fixable, 'ok']]
         .map(x => `<div class="card stat"><span class="badge ${x[2]}">${x[0]}</span><strong>${x[1]}</strong></div>`).join('')}

@@ -32,8 +32,6 @@ export function renderScanSettings(state) {
     <div class="card rules" style="grid-template-columns:1fr">
       <div class="rule-header">快速检查将执行以下 5 项核心规则（固定，不可调整）</div>
       ${quickItems.map(x => `<div class="rule">${x.n}<span class="muted" style="margin-left:12px">${x.d}</span></div>`).join('')}
-      <div class="rule" style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--muted)">不执行：元素对齐、文字安全边距</div>
-      <div class="rule" style="color:var(--muted)">规则版本：builtin-rules-v1.0（只读）</div>
     </div>
   </div>`;
 

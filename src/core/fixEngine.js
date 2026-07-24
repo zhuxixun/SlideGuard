@@ -13,6 +13,7 @@
 import JSZip from 'jszip';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 import { store } from '../store.js';
+import { collectSpElements } from './pptxParser.js';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -146,8 +147,8 @@ export async function fixIssues(pptxData, issues) {
 function applyFix(xmlObj, issue) {
   const slide = xmlObj['p:sld'] || xmlObj['sld'] || xmlObj;
   const spTree = slide['p:cSld']?.['p:spTree'] || slide['cSld']?.['spTree'] || {};
-  const shapes = spTree['p:sp'] || spTree['sp'] || [];
-  const shapeList = Array.isArray(shapes) ? shapes : [shapes];
+  // 递归收集所有形状（含组合形状 grpSp 内的子元素），与扫描时的 extractTexts 保持一致的查找逻辑
+  const shapeList = collectSpElements(spTree);
 
   for (const sp of shapeList) {
     if (!sp) continue;

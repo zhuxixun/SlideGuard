@@ -99,7 +99,7 @@ export async function loadSlide(zip, index) {
  * @param {Object} parent - spTree 或 grpSp 节点
  * @returns {Array<Object>} sp 元素列表
  */
-function collectSpElements(parent) {
+export function collectSpElements(parent) {
   const result = [];
 
   // 本级 p:sp

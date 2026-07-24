@@ -95,6 +95,34 @@ export async function loadSlide(zip, index) {
 }
 
 /**
+ * 递归收集所有 p:sp 元素（含组合内的子元素）
+ * @param {Object} parent - spTree 或 grpSp 节点
+ * @returns {Array<Object>} sp 元素列表
+ */
+function collectSpElements(parent) {
+  const result = [];
+
+  // 本级 p:sp
+  const sps = parent['p:sp'] || parent['sp'] || [];
+  const spList = Array.isArray(sps) ? sps : [sps];
+  for (const sp of spList) {
+    if (sp) result.push(sp);
+  }
+
+  // 递归进入 p:grpSp（组合形状）
+  const grps = parent['p:grpSp'] || parent['grpSp'] || [];
+  const grpList = Array.isArray(grps) ? grps : [grps];
+  for (const grp of grpList) {
+    if (grp) {
+      const inner = collectSpElements(grp);
+      result.push(...inner);
+    }
+  }
+
+  return result;
+}
+
+/**
  * 从幻灯片对象中提取文本元素
  * @param {Object} slideXml - 解析后的幻灯片 XML
  * @returns {Array<{text, fontSize, fontName, bold, color, x, y, w, h, isTitle}>}
@@ -103,9 +131,9 @@ export function extractTexts(slideXml) {
   const texts = [];
   const slide = slideXml['p:sld'] || slideXml['sld'] || slideXml;
   const spTree = slide['p:cSld']?.['p:spTree'] || slide['cSld']?.['spTree'] || {};
-  const shapes = spTree['p:sp'] || spTree['sp'] || [];
 
-  const list = Array.isArray(shapes) ? shapes : [shapes];
+  // 递归收集所有形状（含组合内的子元素）
+  const list = collectSpElements(spTree);
 
   for (const sp of list) {
     if (!sp) continue;

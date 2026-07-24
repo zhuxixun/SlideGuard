@@ -10,6 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **⚠️ git 提交时，必须根据本次改动内容认真填写 commit message，不许偷懒用占位符或敷衍的描述。**
 
+**⚠️ commit message 格式规范：**
+- 修 bug 统一用 `fix:直接描述修了什么`，如 `fix: 修复组合元素内字体检查不到的问题`
+- 不要加 `@` 符号前缀，不要写成 `@ fix: xxx`
+- 其他类型: `feat:`（新功能）、`design:`（设计稿）、`refactor:`（重构）等
+
 ```bash
 npm run build      # Bundle with esbuild → dist/app.bundle.js
 npm run watch      # Watch mode rebuild (自动监听变化)

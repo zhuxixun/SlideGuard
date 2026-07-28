@@ -21,13 +21,22 @@ function selectTitle(slide, presInfo) {
   const placeholders = nonEmpty.filter(t => t.isTitle);
   if (placeholders.length) return placeholders[0];
 
-  const region = slide.layoutTitlePos?.w && slide.layoutTitlePos?.h
-    ? slide.layoutTitlePos
-    : { x: presInfo.width * .05, y: presInfo.height * .03, w: presInfo.width * .9, h: presInfo.height * .19 };
-  const candidates = nonEmpty.filter(t => !t.phType && intersectionRatio({
-    x: t.visibleX ?? t.x, y: t.visibleY ?? t.y,
-    w: t.visibleW ?? t.w, h: t.visibleH ?? t.h,
-  }, region) >= .5);
+  function candidatesByRegion(region) {
+    return nonEmpty.filter(t => !t.phType && intersectionRatio({
+      x: t.visibleX ?? t.x, y: t.visibleY ?? t.y,
+      w: t.visibleW ?? t.w, h: t.visibleH ?? t.h,
+    }, region) >= .5);
+  }
+
+  const defaultRegion = { x: presInfo.width * .05, y: presInfo.height * .03, w: presInfo.width * .9, h: presInfo.height * .19 };
+  const layoutRegion = (slide.layoutTitlePos?.w && slide.layoutTitlePos?.h) ? slide.layoutTitlePos : null;
+
+  // 优先用版式标题区；若找不到候选，降级到默认标题区（避免因版式位置与实际标题错位而漏检）
+  let candidates = layoutRegion ? candidatesByRegion(layoutRegion) : [];
+  if (candidates.length === 0) {
+    candidates = candidatesByRegion(defaultRegion);
+  }
+
   candidates.sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0) ||
     (a.visibleY ?? a.y) - (b.visibleY ?? b.y) || (a.visibleX ?? a.x) - (b.visibleX ?? b.x));
   return candidates[0] || null;

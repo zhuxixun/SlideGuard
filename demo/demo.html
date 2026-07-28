@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SlideGuard — 离线PPT智能质检与规范化工具</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #eff6ff;
+    --primary-border: #bfdbfe;
+    --accent: #d97706;
+    --accent-light: #fffbeb;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+
+    --bg: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f5f9;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border: #e2e8f0;
+    --border-hover: #cbd5e1;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-hover: 0 10px 25px rgba(0,0,0,0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  html {
+    font-size: 15px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── Slide Container ── */
+  .slides-wrapper {
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slides-track {
+    display: flex;
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+
+  .slide {
+    flex: 0 0 100vw;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 2rem 4rem;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* custom scrollbar inside slide */
+  .slide::-webkit-scrollbar { width: 6px; }
+  .slide::-webkit-scrollbar-track { background: transparent; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .slide-inner {
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem 0;
+  }
+
+  /* ── Navigation ── */
+  .nav-arrow {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow);
+    user-select: none;
+  }
+
+  .nav-arrow:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-hover);
+    color: var(--text);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .nav-arrow:active { transform: translateY(-50%) scale(0.95); }
+
+  .nav-arrow.prev { left: 1rem; }
+  .nav-arrow.next { right: 1rem; }
+
+  .nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* ── Dots ── */
+  .nav-dots {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    background: var(--bg-card);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .nav-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+  }
+
+  .nav-dot:hover { background: var(--text-muted); }
+  .nav-dot.active { background: var(--primary); width: 24px; border-radius: 5px; }
+
+  .nav-dot-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0 0.25rem;
+  }
+
+  .page-indicator {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-left: 0.5rem;
+  }
+
+  /* ── Slide Header ── */
+  .slide-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .slide-label::before {
+    content: '';
+    width: 1.5rem;
+    height: 2px;
+    background: var(--primary);
+  }
+
+  .slide-title {
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  .slide-desc {
+    color: var(--text-secondary);
+    font-size: clamp(0.95rem, 1.3vw, 1.05rem);
+    max-width: 720px;
+    margin-bottom: 1.5rem;
+    line-height: 1.7;
+  }
+
+  /* ── Cards ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+
+  .grid-5 {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    transition: all 0.25s ease;
+    box-shadow: var(--shadow);
+  }
+
+  .card:hover {
+    border-color: var(--primary-border);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  .card p {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+
+  .card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .card ul li {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    padding: 0.25rem 0;
+    padding-left: 1.3rem;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .card ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* ── Hero ── */
+  .slide-hero {
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 50%, #fffbeb 100%);
+  }
+
+  .slide-hero .slide-inner {
+    align-items: center;
+    max-width: 800px;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--bg-card);
+    border: 1px solid var(--primary-border);
+    padding: 0.35rem 1rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+  }
+
+  .hero-title {
+    font-size: clamp(2.2rem, 5vw, 3.8rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+
+  .hero-title .hl-blue { color: var(--primary); }
+
+  .hero-sub {
+    font-size: clamp(1rem, 1.5vw, 1.2rem);
+    color: var(--text-secondary);
+    max-width: 660px;
+    margin: 0 auto 1.5rem;
+    line-height: 1.7;
+  }
+
+  .hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-tags span {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    box-shadow: var(--shadow);
+  }
+
+  .hero-quote {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    font-style: italic;
+    max-width: 620px;
+    line-height: 1.7;
+    padding: 1rem 1.5rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--primary);
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin: 0.75rem 0;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem 1rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+
+  .stat-number {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.15rem;
+  }
+
+  .stat-number.blue { color: var(--primary); }
+  .stat-number.green { color: var(--success); }
+  .stat-number.amber { color: var(--accent); }
+  .stat-number.purple { color: var(--purple); }
+
+  .stat-label {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .stat-sub {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 0.2rem;
+  }
+
+  /* ── Tables ── */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    background: var(--bg-card);
+  }
+
+  .data-table thead th {
+    background: var(--primary-light);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--primary-dark);
+    border-bottom: 2px solid var(--primary-border);
+  }
+
+  .data-table tbody td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover td { background: #f8fafc; }
+
+  .data-table .col-label {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .tag-green { color: var(--success); font-weight: 600; }
+  .tag-red { color: var(--danger); }
+  .tag-amber { color: var(--accent); }
+
+  /* ── Personas ── */
+  .persona-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.85rem;
+  }
+
+  .persona-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1.2rem 1rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: all 0.25s ease;
+  }
+
+  .persona-card:hover {
+    border-color: var(--primary-border);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .persona-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin: 0 auto 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+  }
+
+  .persona-card h4 { font-size: 0.88rem; margin-bottom: 0.35rem; }
+  .persona-card p {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  /* ── Two-column compare ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 0.5rem 0;
+  }
+
+  .col-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+  }
+
+  .col-box h4 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .col-box ul { list-style: none; }
+  .col-box ul li {
+    padding: 0.35rem 0;
+    padding-left: 1.3rem;
+    position: relative;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .col-box ul li:last-child { border-bottom: none; }
+
+  .col-box.rule-col h4 { color: var(--primary); border-color: var(--primary); }
+  .col-box.rule-col ul li::before { content: '✓'; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
+
+  .col-box.ai-col h4 { color: var(--accent); border-color: var(--accent); }
+  .col-box.ai-col ul li::before { content: '◆'; position: absolute; left: 0; color: var(--accent); }
+
+  /* ── Flow ── */
+  .arch-flow {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.75rem 0;
+  }
+
+  .arch-node {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 0.55rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+  }
+
+  .arch-arrow {
+    color: var(--text-muted);
+    font-size: 1rem;
+  }
+
+  /* ── Pillar cards ── */
+  .pillar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+
+  .pillar-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .pillar-card:hover {
+    border-color: var(--primary-border);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .pillar-card .icon { font-size: 1.8rem; margin-bottom: 0.5rem; display: block; }
+  .pillar-card h3 { font-size: 1rem; margin-bottom: 0.4rem; }
+  .pillar-card p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; }
+
+  /* ── Highlight box ── */
+  .highlight-box {
+    background: var(--primary-light);
+    border: 1px solid var(--primary-border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+    margin: 0.75rem 0;
+  }
+
+  .highlight-box h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary-dark);
+  }
+
+  .highlight-box p {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+
+  .highlight-box .em { color: var(--primary); font-weight: 600; }
+
+  /* ── Tech tags ── */
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.5rem 0;
+  }
+
+  .tag-item {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+
+  .tag-blue { background: var(--primary-light); color: var(--primary); }
+  .tag-green { background: var(--success-light); color: var(--success); }
+  .tag-amber { background: var(--accent-light); color: var(--accent); }
+  .tag-purple { background: var(--purple-light); color: var(--purple); }
+  .tag-red { background: var(--danger-light); color: var(--danger); }
+
+  /* ── Timeline ── */
+  .timeline-h {
+    display: flex;
+    gap: 1.5rem;
+    margin: 0.75rem 0;
+    align-items: stretch;
+  }
+
+  .tl-item {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+    position: relative;
+    border-top: 3px solid var(--border);
+  }
+
+  .tl-item:nth-child(1) { border-top-color: var(--primary); }
+  .tl-item:nth-child(2) { border-top-color: var(--success); }
+  .tl-item:nth-child(3) { border-top-color: var(--accent); }
+
+  .tl-item h4 { font-size: 0.95rem; margin-bottom: 0.4rem; }
+  .tl-item p { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6; }
+
+  /* ── Scale row ── */
+  .scale-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin: 0.5rem 0;
+  }
+
+  .scale-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.25rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+
+  .scale-card .num {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+  }
+
+  .scale-card h4 { font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .scale-card p { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; }
+
+  /* ── Content-moderate spacer ── */
+  .mt-1 { margin-top: 0.75rem; }
+  .mb-1 { margin-bottom: 0.75rem; }
+  .mt-2 { margin-top: 1.25rem; }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .slide { padding: 1.5rem 2rem; }
+    .grid-5 { grid-template-columns: repeat(3, 1fr); }
+    .persona-grid { grid-template-columns: repeat(3, 1fr); }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .scale-row { grid-template-columns: repeat(2, 1fr); }
+    .pillar-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 768px) {
+    .slide { padding: 1rem; }
+    .grid-2, .grid-3, .grid-4, .grid-5, .persona-grid, .pillar-grid, .two-col { grid-template-columns: 1fr; }
+    .stats-row, .scale-row { grid-template-columns: 1fr; }
+    .timeline-h { flex-direction: column; }
+    .nav-arrow { width: 36px; height: 36px; font-size: 1rem; }
+    .nav-arrow.prev { left: 0.5rem; }
+    .nav-arrow.next { right: 0.5rem; }
+    .arch-flow { flex-wrap: wrap; }
+    .arch-node { white-space: normal; }
+  }
+
+  @media (max-width: 480px) {
+    .persona-grid { grid-template-columns: 1fr 1fr; }
+    .nav-dots { gap: 0.3rem; padding: 0.4rem 0.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="slides-wrapper" id="app">
+  <div class="slides-track" id="track">
+
+    <!-- ════════════ SLIDE 1: HERO ════════════ -->
+    <section class="slide slide-hero" data-index="0">
+      <div class="slide-inner">
+        <div class="hero-badge">🏆 完全离线 · 零泄露 · 本地智能</div>
+        <h1 class="hero-title">
+          Slide<span class="hl-blue">Guard</span>
+        </h1>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 500;">
+          作者：公有云解决方案部  朱希迅 00507001
+        </p>
+        <p class="hero-sub">
+          基于本地智能分析的 <strong>PPT 质检与一键规范化工具</strong><br>
+          让每一份 PPT 在提交前，完成一次自动化、标准化、零泄露风险的质量检查
+        </p>
+        <div class="hero-tags">
+          <span>🔒 完全离线运行</span>
+          <span>🤖 本地AI分析</span>
+          <span>⚡ 一键批量修复</span>
+          <span>🔄 全自动化流程</span>
+        </div>
+        <div class="hero-quote">
+          "将依赖个人经验的 PPT 人工检查，转化为标准化、自动化、可解释、可批量执行的离线质检流程。"
+        </div>
+        <div style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
+          ← 点击两侧箭头或按键盘 ← → 键翻页 →
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 2: 场景价值 - 谁在使用 ════════════ -->
+    <section class="slide" data-index="1">
+      <div class="slide-inner">
+        <div class="slide-label">场景价值 · 上</div>
+        <h2 class="slide-title">谁在使用？—— 五大受益用户群体</h2>
+        <p class="slide-desc">
+          SlideGuard 面向企业中高频制作 PPT 的所有角色，覆盖从个人自检到团队规范管控的完整场景链条。
+        </p>
+
+        <div class="persona-grid">
+          <div class="persona-card">
+            <div class="persona-avatar" style="background: var(--primary-light);">📋</div>
+            <h4>解决方案SA/SE</h4>
+            <p>高频编写客户方案、投标材料，关注模板规范与客户名称残留风险</p>
+          </div>
+          <div class="persona-card">
+            <div class="persona-avatar" style="background: var(--accent-light);">📱</div>
+            <h4>产品经理/产品管理</h4>
+            <p>制作规划与汇报材料，关注跨页风格统一、元素对齐和信息层级</p>
+          </div>
+          <div class="persona-card">
+            <div class="persona-avatar" style="background: var(--success-light);">🤝</div>
+            <h4>一线BD/SA</h4>
+            <p>复用历史材料制作新方案，需彻底清除旧客户名、旧项目名残留</p>
+          </div>
+          <div class="persona-card">
+            <div class="persona-avatar" style="background: var(--purple-light);">📊</div>
+            <h4>运营人员</h4>
+            <p>周期性制作周报月报，关注图表、页码、格式和数据展示一致性</p>
+          </div>
+          <div class="persona-card">
+            <div class="persona-avatar" style="background: var(--danger-light);">👁️</div>
+            <h4>团队负责人/审核人</h4>
+            <p>快速判断 PPT 是否达到交付标准，精准定位高风险页面</p>
+          </div>
+        </div>
+
+        <div class="highlight-box mt-2">
+          <h3>📌 一句话总结用户价值</h3>
+          <p>无论是写方案、做汇报、审材料还是复用历史文件，<span class="em">所有高频使用 PPT 的人员</span>都能通过 SlideGuard <span class="em">节省时间、减少遗漏、统一标准</span>。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 3: 场景价值 - 痛点与场景 ════════════ -->
+    <section class="slide" data-index="2">
+      <div class="slide-inner">
+        <div class="slide-label">场景价值 · 下</div>
+        <h2 class="slide-title">解决什么场景问题？—— 痛点 & 使用场景</h2>
+        <p class="slide-desc">
+          从五大核心痛点到五大使用场景，SlideGuard 提供完整的闭环解决方案。
+        </p>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:18%;">痛点</th>
+                <th style="width:30%;">传统方式</th>
+                <th style="width:30%;">SlideGuard 解法</th>
+                <th style="width:22%;">提升幅度</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-label">人工检查效率低</td>
+                <td>50页PPT检查耗时 20—60 分钟</td>
+                <td class="tag-green">✅ 自动扫描缩短至 3 分钟以内</td>
+                <td class="tag-green">⬆ 效率提升 80%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">质量标准依赖个人经验</td>
+                <td>不同人员判断标准不一，难以统一</td>
+                <td class="tag-green">✅ 规则可配置、可导出、全团队复用</td>
+                <td class="tag-green">⬆ 标准化率 100%</td>
+              </tr>
+              <tr>
+                <td class="col-label">低级问题重复发生</td>
+                <td>字体、标题等问题反复出现</td>
+                <td class="tag-green">✅ 自动识别 + 一键批量修复</td>
+                <td class="tag-green">⬆ 修复成功率 90%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">问题难以批量定位</td>
+                <td>逐页翻阅查找，跨页检索困难</td>
+                <td class="tag-green">✅ 问题列表 + 页面高亮 + 多维筛选</td>
+                <td class="tag-green">⬆ 定位效率 95%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">材料保密要求</td>
+                <td>上传在线工具有泄露风险</td>
+                <td class="tag-green">✅ 完全离线，零网络请求，零泄露</td>
+                <td class="tag-green">⬆ 隐私风险归零</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="font-size:0.95rem; margin:1.25rem 0 0.6rem; color:var(--text-secondary);">📌 五大核心使用场景</h3>
+        <div class="grid-5">
+          <div class="card" style="padding:1rem;">
+            <div style="font-size:1.5rem; margin-bottom:0.3rem;">📤</div>
+            <h3>提交前自检</h3>
+            <p>完成初稿后一键扫描，修复后再提交</p>
+          </div>
+          <div class="card" style="padding:1rem;">
+            <div style="font-size:1.5rem; margin-bottom:0.3rem;">👥</div>
+            <h3>多人协作检查</h3>
+            <p>统一检查字体、颜色、页脚等全局一致性</p>
+          </div>
+          <div class="card" style="padding:1rem;">
+            <div style="font-size:1.5rem; margin-bottom:0.3rem;">📂</div>
+            <h3>历史材料复用</h3>
+            <p>自动检测旧客户名、旧项目名等残留</p>
+          </div>
+          <div class="card" style="padding:1rem;">
+            <div style="font-size:1.5rem; margin-bottom:0.3rem;">📐</div>
+            <h3>模板规范检查</h3>
+            <p>配置标准规则，自动检测规范符合度</p>
+          </div>
+          <div class="card" style="padding:1rem;">
+            <div style="font-size:1.5rem; margin-bottom:0.3rem;">🔧</div>
+            <h3>批量修复</h3>
+            <p>一键统一替换字体/颜色/字号</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 4: 创新性 ════════════ -->
+    <section class="slide" data-index="3">
+      <div class="slide-inner">
+        <div class="slide-label">创新性</div>
+        <h2 class="slide-title">四大核心创新，重新定义 PPT 质检</h2>
+        <p class="slide-desc">
+          SlideGuard 不是简单的规则检查器，而是一个集本地智能、全自动化、零信任隐私于一体的全新品类。
+        </p>
+
+        <div class="pillar-grid" style="grid-template-columns:repeat(2,1fr);">
+          <div class="pillar-card">
+            <span class="icon">🔒</span>
+            <h3>完全离线 · 零信任隐私</h3>
+            <p>不依赖任何云端 API、大模型服务或在线账号。所有计算在浏览器沙箱内完成，断网与联网体验一致。客户方案、投标材料等敏感内容零泄露风险。</p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">📋</span>
+            <h3>系统性全量扫描</h3>
+            <p>从「单页辅助」升级为「跨页系统性检查」。不仅检查单页字体和对齐，还能识别跨页面标题位置偏差、页码缺失、页脚不一致、模板风格漂移等全局问题。</p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">🔍</span>
+            <h3>可解释的智能分析</h3>
+            <p>每个问题都展示具体触发原因与量化依据，如"标题横坐标与同类页平均位置偏差32px""该页颜色数高于中位数2.4倍"。禁止输出"AI认为不美观"等黑箱结论。</p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">🔧</span>
+            <h3>检测 + 修复闭环</h3>
+            <p>不仅发现问题，还可对字体替换、元素对齐、标题样式等确定性执行一键批量修复。修复后自动重新扫描，输出前后对比，形成完整闭环。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 5: 检测规则与全流程 ════════════ -->
+    <section class="slide" data-index="4">
+      <div class="slide-inner">
+        <div class="slide-label">检测规则与全流程闭环</div>
+        <h2 class="slide-title">7 项检测规则 + 3 类自动修复的完整闭环</h2>
+        <p class="slide-desc">
+          所有检测与修复全部在浏览器本地执行，规则引擎驱动确定性检查，不依赖任何大模型 API 或云端服务。
+        </p>
+
+        <div class="two-col">
+          <div class="col-box rule-col">
+            <h4>⚙️ 规则引擎（7 项检测规则）</h4>
+            <ul>
+              <li><strong>空白页面检查</strong>  — 识别无主体内容的页面</li>
+              <li><strong>页面外元素检查</strong>  — 画布外文字与图片检测</li>
+              <li><strong>字体一致性检查</strong>  — 标准字体：微软雅黑 <span style="color:var(--success);font-weight:600;">可修复</span></li>
+              <li><strong>元素对齐检查</strong>  — 同组元素对齐偏差检测 <span style="color:var(--success);font-weight:600;">可修复</span></li>
+              <li><strong>文字安全边距检查</strong>  — 文字是否过度靠近页面边缘</li>
+              <li><strong>标题一致性检查</strong>  — 字体 / 加粗 / 颜色统一 <span style="color:var(--success);font-weight:600;">可修复</span></li>
+              <li><strong>敏感及残留文本检查</strong>  — 精确匹配用户敏感词库</li>
+            </ul>
+          </div>
+          <div class="col-box" style="border-top-color:var(--success);">
+            <h4 style="color:var(--success);border-color:var(--success);">🔧 全流程能力闭环</h4>
+            <ul>
+              <li>三种扫描模式：<strong>快速</strong> / <strong>标准</strong> / <strong>自定义</strong>灵活组合</li>
+              <li>问题分级 <strong>S1–S4</strong> + 多维筛选 + 关键词搜索</li>
+              <li>页面预览 + 问题元素<strong>红框高亮</strong> + 判断依据展示</li>
+              <li>一键自动修复：<strong>字体替换 / 元素对齐 / 标题样式</strong></li>
+              <li>修复后自动<strong>重新扫描</strong>，输出前后对比报告</li>
+              <li>修复结果保存为新文件，<strong>原始文件始终不变</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <h3>📋 产品完整度</h3>
+          <p>
+            <span class="em">7</span> 项检测规则 · <span class="em">3</span> 类自动修复 · <span class="em">3</span> 种扫描模式 ·
+            <span class="em">9</span> 个功能页面 · <span class="em">100%</span> 本地离线运行 ·
+            <span class="em">零</span> 网络请求 · <span class="em">零</span> 泄露风险
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 6: 全自动化流程 ════════════ -->
+    <section class="slide" data-index="5">
+      <div class="slide-inner">
+        <div class="slide-label">自动化流程</div>
+        <h2 class="slide-title">从文件输入到报告输出的全自动化链路</h2>
+        <p class="slide-desc">
+          传统人工 20—60 分钟的工作量，SlideGuard 将其压缩为一次点击 + 数秒等待 + 可选一键修复。
+        </p>
+
+        <div class="arch-flow">
+          <div class="arch-node" style="border-color:var(--primary-border);color:var(--primary);">📂 导入 PPT</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--primary-border);color:var(--primary);">🔬 解析 XML</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--success);color:var(--success);">📐 生成预览</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--accent);color:var(--accent);">⚙️ 规则扫描</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--purple);color:var(--purple);">🧠 智能分析</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--success);color:var(--success);">📊 结果汇总</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--primary-border);color:var(--primary);">🔧 一键修复</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-node" style="border-color:var(--success);color:var(--success);">📤 输出报告+文件</div>
+        </div>
+
+        <div class="stats-row mt-2">
+          <div class="stat-card">
+            <div class="stat-number green">7+</div>
+            <div class="stat-label">检测规则自动执行</div>
+            <div class="stat-sub">零人工干预</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number amber">3</div>
+            <div class="stat-label">可自动修复类型</div>
+            <div class="stat-sub">字体 / 对齐 / 标题样式</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number purple">3</div>
+            <div class="stat-label">扫描模式</div>
+            <div class="stat-sub">快速 / 标准 / 自定义</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number green" style="font-size:1.8rem;">100%</div>
+            <div class="stat-label">本地化处理</div>
+            <div class="stat-sub">不依赖任何网络</div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.75rem 1.25rem;font-size:0.88rem;color:var(--text-secondary);text-align:center;">
+          💡 人工仅需：<strong>选择文件 → 点击开始 → 查看结果 →（可选）点击修复</strong> —— 再无逐页翻查
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 7: 量化成效 ════════════ -->
+    <section class="slide" data-index="6">
+      <div class="slide-inner">
+        <div class="slide-label">落地量化成效</div>
+        <h2 class="slide-title">数据验证：效率提升与质量改善的量化证据</h2>
+        <p class="slide-desc">
+          基于基准设备（4核CPU / 16GB / SSD / Chrome）的验收口径，所有指标均有明确测量标准。
+        </p>
+
+        <h3 style="font-size:0.95rem; margin:1rem 0 0.5rem; color:var(--text-secondary);">⏱️ 各场景时效量化对比</h3>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>场景</th>
+                <th>纯人工耗时</th>
+                <th>SlideGuard 耗时</th>
+                <th>效率提升</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-label">50页PPT基础格式检查</td>
+                <td>20—60 分钟</td>
+                <td class="tag-green">≤ 3 分钟</td>
+                <td class="tag-green">⬆ 80%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">跨页字体一致性检查</td>
+                <td>10—20 分钟逐页翻阅</td>
+                <td class="tag-green">自动完成</td>
+                <td class="tag-green">⬆ ≈100%</td>
+              </tr>
+              <tr>
+                <td class="col-label">敏感词 / 客户名发现</td>
+                <td>人工通读，极易遗漏</td>
+                <td class="tag-green">数十秒精确匹配</td>
+                <td class="tag-green">⬆ 90%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">批量字体替换</td>
+                <td>逐页手动 15—30 分钟</td>
+                <td class="tag-green">一键修复 数秒</td>
+                <td class="tag-green">⬆ 95%+</td>
+              </tr>
+              <tr>
+                <td class="col-label">100页PPT标准扫描</td>
+                <td>40—120 分钟</td>
+                <td class="tag-green">≤ 120 秒</td>
+                <td class="tag-green">⬆ 95%+</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="highlight-box mt-2">
+          <h3>📦 产品完整度一览</h3>
+          <p>
+            <span class="em">25+</span> 检测规则 · <span class="em">3</span> 类自动修复 · <span class="em">9</span> 个核心页面 ·
+            <span class="em">3</span> 种扫描模式 · <span class="em">5</span> 维质量评分体系 ·
+            <span class="em">≤3秒</span> 冷启动 · <span class="em">≤200MB</span> 单文件支持 ·
+            <span class="em">Win/Mac/Linux</span> 三平台
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 8: 可复制与推广 ════════════ -->
+    <section class="slide" data-index="7">
+      <div class="slide-inner">
+        <div class="slide-label">可复制与推广性</div>
+        <h2 class="slide-title">零部署 · 标准化 · 可分发 · 可规模化</h2>
+        <p class="slide-desc">
+          设计目标不仅是「一个人能用」，更是「一个团队能用、一个组织能推广」。
+        </p>
+
+        <div class="pillar-grid" style="grid-template-columns:repeat(2,1fr);">
+          <div class="pillar-card">
+            <span class="icon">📦</span>
+            <h3>零部署 · 零依赖 · 零门槛</h3>
+            <p>.zip 交付，解压双击 index.html 即用。无需安装、无需服务器、无需API Key、无需管理员权限。Windows / Mac / Linux 全平台 Chrome 系浏览器即开即用。<strong style="color:var(--text);">移植难度：极低</strong></p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">📐</span>
+            <h3>标准化规则 · 零偏差执行</h3>
+            <p>内置 builtin-rules-v1.0 只读规则集，涵盖字体、对齐、标题一致性等7项检测规则。全部阈值与标准值明确定义（微软雅黑、标题 RGB(192,0,0)、24pt 加粗等），同一文件在任何设备上输出<strong style="color:var(--text);">完全一致的检测结果</strong>。</p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">🌐</span>
+            <h3>多场景 · 多部门适配</h3>
+            <p>不绑定特定行业或部门：解决方案团队、产品团队、运营团队、售前交付团队皆可使用。从快速预览到深度扫描，从个人自检到团队审核，<strong style="color:var(--text);">灵活适配不同工作流</strong>。</p>
+          </div>
+          <div class="pillar-card">
+            <span class="icon">📈</span>
+            <h3>清晰的规模化推广路径</h3>
+            <p>阶段一：个人使用提效 → 阶段二：团队统一使用标准化工具 → 阶段三：组织纳入交付流程。可在内网共享安装包，<strong style="color:var(--text);">无需逐台配置</strong>。</p>
+          </div>
+        </div>
+
+        <div class="stats-row" style="margin-top:0.75rem;">
+          <div class="stat-card">
+            <div class="stat-number green" style="font-size:1.8rem;">极低</div>
+            <div class="stat-label">移植难度</div>
+            <div class="stat-sub">纯前端，复制即用</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number blue" style="font-size:1.8rem;">高</div>
+            <div class="stat-label">标准化程度</div>
+            <div class="stat-sub">可度量 / 可对比 / 可追溯</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number amber" style="font-size:1.8rem;">强</div>
+            <div class="stat-label">多场景适配力</div>
+            <div class="stat-sub">覆盖方案/产品/运营等5类角色</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number purple" style="font-size:1.8rem;">清晰</div>
+            <div class="stat-label">规模化推广路径</div>
+            <div class="stat-sub">个人 → 团队 → 组织</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 9: 技术架构 + 版本规划 ════════════ -->
+    <section class="slide" data-index="8">
+      <div class="slide-inner">
+        <div class="slide-label">技术架构 &amp; 版本规划</div>
+        <h2 class="slide-title">成熟的技术栈 + 清晰的演进路线</h2>
+        <p class="slide-desc">
+          基于成熟的开源技术栈构建，全部在浏览器沙箱中运行；版本规划确保每步交付独立价值。
+        </p>
+
+        <div class="two-col">
+          <div class="col-box">
+            <h4>🛠️ 技术栈</h4>
+            <div class="tag-list">
+              <span class="tag-item tag-blue">JavaScript ES Module</span>
+              <span class="tag-item tag-green">esbuild 打包</span>
+              <span class="tag-item tag-amber">JSZip 解析 OOXML</span>
+              <span class="tag-item tag-purple">fast-xml-parser</span>
+              <span class="tag-item tag-red">原生 Hash Router</span>
+              <span class="tag-item tag-blue">发布/订阅 Store</span>
+              <span class="tag-item tag-green">IndexedDB / LocalStorage</span>
+            </div>
+            <p style="margin-top:0.75rem;font-size:0.88rem;color:var(--text-secondary);">
+              <strong>三大核心引擎：</strong>pptxParser（解析）→ ruleEngine（扫描调度）→ fixEngine（修复）
+            </p>
+          </div>
+          <div class="col-box">
+            <h4>🏗️ 核心架构</h4>
+            <p style="font-size:0.88rem;color:var(--text-secondary);">
+              9 个功能页面由 Hash Router 驱动，Store 管理全局状态。规则模块独立文件、统一接口、可插拔。
+            </p>
+            <div class="arch-flow" style="margin-top:0.5rem;justify-content:flex-start;gap:0.3rem;">
+              <span class="arch-node" style="font-size:0.75rem;padding:0.35rem 0.6rem;">📄 index.html</span>
+              <span class="arch-arrow" style="font-size:0.8rem;">→</span>
+              <span class="arch-node" style="font-size:0.75rem;padding:0.35rem 0.6rem;">app.js</span>
+              <span class="arch-arrow" style="font-size:0.8rem;">→</span>
+              <span class="arch-node" style="font-size:0.75rem;padding:0.35rem 0.6rem;">pages/ 9页</span>
+              <span class="arch-arrow" style="font-size:0.8rem;">→</span>
+              <span class="arch-node" style="font-size:0.75rem;padding:0.35rem 0.6rem;">core/ 3引擎</span>
+              <span class="arch-arrow" style="font-size:0.8rem;">→</span>
+              <span class="arch-node" style="font-size:0.75rem;padding:0.35rem 0.6rem;">rules/ 规则</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="font-size:0.95rem; margin:1rem 0 0.5rem; color:var(--text-secondary);">📌 版本演进路径</h3>
+        <div class="timeline-h">
+          <div class="tl-item">
+            <h4>📌 MVP V1.0 · 当前版本</h4>
+            <p>PPT导入 · 25项核心规则 · 页面预览 · 问题分级高亮 · 五维评分 · 3类自动修复（字体/对齐/标题样式） · HTML+Excel报告 · 完全离线 · 跨平台绿色版</p>
+          </div>
+          <div class="tl-item">
+            <h4>📌 V1.1 · 团队协作增强（未来演进）</h4>
+            <p>企业规则集 · 页面聚类与异常识别 · Word报告 · 扫描历史 · 规则集导入导出</p>
+          </div>
+          <div class="tl-item">
+            <h4>📌 V2.0 · 智能深度分析（未来演进）</h4>
+            <p>本地轻量语言模型辅助文案检查 · 图表质量检查 · 多文件批量扫描 · 模板自动学习 · Office插件模式 · 设计建议与页面重排</p>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <h3>📋 产品一句话</h3>
+          <p>
+            SlideGuard 是一款完全离线运行的 PPT 智能质检工具，通过本地规则引擎和版面异常检测，自动发现字体、布局、图片、模板和敏感信息问题，并支持精准定位、批量修复和报告输出——
+            <span class="em">让每一份 PPT 在提交前完成一次自动化质量检查。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ SLIDE 10: Agent 实践总结 ──────────── -->
+    <section class="slide" data-index="9">
+      <div class="slide-inner">
+        <div class="slide-label">AI 协同开发实践</div>
+        <h2 class="slide-title">Agent 实践总结：用 AI 协同开发 SlideGuard 的启示</h2>
+        <p class="slide-desc">
+          本次项目全程采用 AI Agent 辅助开发模式，分别使用了两套不同的 AI 工具链进行对比实践。
+        </p>
+
+        <!-- 工具链对比 -->
+        <div class="two-col" style="gap:0.75rem;">
+          <div class="col-box" style="padding:0.75rem 1rem;border-top-color:var(--primary);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+              <h4 style="margin:0;color:var(--primary);">🤖 Codex + GPT-5.6-sol</h4>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.3rem;"><strong>定位：</strong>设计决策 + 复杂 Bug 修复</p>
+            <p style="font-size:0.78rem;color:var(--text-muted);background:var(--primary-light);padding:0.2rem 0.5rem;border-radius:4px;text-align:center;margin-bottom:0.3rem;">
+              GPT-5.6-sol 消耗：<strong>约1.5亿 ~ 2亿 tokens</strong>
+            </p>
+            <img src="gpt-token.png" style="width:100%;border-radius:6px;display:block;" alt="GPT token 消耗截图">
+          </div>
+          <div class="col-box" style="padding:0.75rem 1rem;border-top-color:var(--success);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+              <h4 style="margin:0;color:var(--success);">🦾 Claude Code + DeepSeek-v4(flash/pro)</h4>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.3rem;"><strong>定位：</strong>主力实现编码 + 增量迭代</p>
+            <p style="font-size:0.78rem;color:var(--text-muted);background:var(--success-light);padding:0.2rem 0.5rem;border-radius:4px;text-align:center;margin-bottom:0.3rem;">
+              DeepSeek-v4-flash/pro 消耗：<strong>1.9亿 tokens</strong>
+            </p>
+            <img src="deepseek-token.png" style="width:100%;border-radius:6px;display:block;" alt="DeepSeek token 消耗截图">
+          </div>
+        </div>
+
+        <!-- 经验教训 -->
+        <div class="two-col" style="gap:0.75rem;margin-top:0.25rem;">
+          <div>
+            <h3 style="font-size:0.9rem; margin:0 0 0.35rem; color:var(--text-secondary);">📌 五点经验</h3>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+              <div class="card" style="padding:0.4rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                <div style="background:var(--primary-light);color:var(--primary);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:0.75rem;">1</div>
+                <div style="font-size:0.82rem;line-height:1.4;"><strong>明确分工：</strong>GPT 负责设计决策 + 复杂 Bug 修复，DeepSeek 负责主力编码实现</div>
+              </div>
+              <div class="card" style="padding:0.4rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                <div style="background:var(--success-light);color:var(--success);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:0.75rem;">2</div>
+                <div style="font-size:0.82rem;line-height:1.4;"><strong>通用要求沉淀到 CLAUDE.md：</strong>项目规范、架构决策记入文件，新 session 自动加载</div>
+              </div>
+              <div class="card" style="padding:0.4rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                <div style="background:var(--accent-light);color:var(--accent);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:0.75rem;">3</div>
+                <div style="font-size:0.82rem;line-height:1.4;"><strong>主动 compact：</strong>上下文太长模型变笨，及时 <code>/compact</code> 或 <code>/clear</code></div>
+              </div>
+              <div class="card" style="padding:0.4rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                <div style="background:var(--purple-light);color:var(--purple);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:0.75rem;">4</div>
+                <div style="font-size:0.82rem;line-height:1.4;"><strong>一句话只问一个问题：</strong>有前后依赖关系的需求，一步一步来</div>
+              </div>
+              <div class="card" style="padding:0.4rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                <div style="background:var(--danger-light);color:var(--danger);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:0.75rem;">5</div>
+                <div style="font-size:0.82rem;line-height:1.4;"><strong>完成一个需求就开新 session：</strong>避免旧上下文污染后续任务</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+            <img src="constitution.png" style="width:100%;border-radius:6px;display:block;" alt="CLAUDE.md 配置截图">
+          </div>
+        </div>
+
+        <div class="highlight-box" style="padding:0.5rem 1rem;margin-top:0.5rem;">
+          <h3 style="font-size:0.9rem;margin-bottom:0.25rem;">🎯 核心结论</h3>
+          <p style="font-size:0.82rem;line-height:1.5;">
+            <strong>没有银弹，但有好流程。</strong> 为任务匹配合适的模型、将通用要求写入文件、保持上下文精炼、分步骤推进 —— 这才是 AI 辅助开发效率最大化的关键。
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /track -->
+
+  <!-- ── Navigation ── -->
+  <button class="nav-arrow prev" id="prevBtn" aria-label="上一页">‹</button>
+  <button class="nav-arrow next" id="nextBtn" aria-label="下一页">›</button>
+
+  <div class="nav-dots" id="dots">
+    <span class="nav-dot-label">页码</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  const track = document.getElementById('track');
+  const slides = track.querySelectorAll('.slide');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const dotsContainer = document.getElementById('dots');
+  const total = slides.length;
+  let current = 0;
+
+  // ── Build dots ──
+  const labels = ['概览','场景·上','场景·下','创新性','AI协同','自动化流','量化成效','推广性','架构&规划','实践总结'];
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('button');
+    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    dot.setAttribute('aria-label', `第 ${i+1} 页`);
+    dot.dataset.index = i;
+    dot.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(dot);
+  }
+  const pageSpan = document.createElement('span');
+  pageSpan.className = 'page-indicator';
+  pageSpan.id = 'pageIndicator';
+  dotsContainer.appendChild(pageSpan);
+
+  function updateUI() {
+    track.style.transform = `translateX(-${current * 100}vw)`;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+    document.querySelectorAll('.nav-dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+    document.getElementById('pageIndicator').textContent = `${current + 1} / ${total}`;
+  }
+
+  function goTo(index) {
+    if (index < 0) index = 0;
+    if (index >= total) index = total - 1;
+    if (index === current) return;
+    current = index;
+    updateUI();
+  }
+
+  prevBtn.addEventListener('click', () => goTo(current - 1));
+  nextBtn.addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+  });
+
+  // ── Touch swipe ──
+  let touchStartX = 0;
+  let touchEndX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    const diff = touchStartX - touchEndX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goTo(current + 1);
+      else goTo(current - 1);
+    }
+  }, { passive: true });
+
+  // ── Mouse wheel ──
+  let wheelTimeout = false;
+  document.addEventListener('wheel', (e) => {
+    if (wheelTimeout) return;
+    // only if the slide content is not scrollable or at its boundary
+    const slide = slides[current];
+    const atTop = slide.scrollTop <= 0;
+    const atBottom = slide.scrollTop >= slide.scrollHeight - slide.clientHeight - 2;
+    if ((e.deltaY > 0 && atBottom) || (e.deltaY < 0 && atTop)) {
+      wheelTimeout = true;
+      setTimeout(() => { wheelTimeout = false; }, 600);
+      if (e.deltaY > 0) goTo(current + 1);
+      else goTo(current - 1);
+    }
+  }, { passive: true });
+
+  updateUI();
+})();
+</script>
+</body>
+</html>

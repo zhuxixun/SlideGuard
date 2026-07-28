@@ -20,6 +20,10 @@ const parser = new XMLParser({
   attributeNamePrefix: '@_',
   processEntities: false,
   parseNumbers: false,
+  // OOXML often stores meaningful spaces at a run boundary (or in a run of
+  // their own). The default trimValues=true would silently remove them when
+  // a repaired slide is serialized again.
+  trimValues: false,
 });
 
 const builder = new XMLBuilder({

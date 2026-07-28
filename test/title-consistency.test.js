@@ -3,9 +3,36 @@ import assert from 'node:assert/strict';
 
 import JSZip from 'jszip';
 import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutTextColorStyles, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
+import { fixIssues } from '../src/core/fixEngine.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
 const presInfo = { width: 10_000, height: 7_500 };
+
+test('title auto-fix preserves spaces between text runs', async () => {
+  const zip = new JSZip();
+  zip.file('ppt/slides/slide1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <p:sld xmlns:p="p" xmlns:a="a"><p:cSld><p:spTree><p:sp>
+      <p:nvSpPr><p:cNvPr id="7"/><p:nvPr/></p:nvSpPr>
+      <p:spPr><a:xfrm><a:off x="500" y="300"/><a:ext cx="9000" cy="800"/></a:xfrm></p:spPr>
+      <p:txBody><a:p>
+        <a:r><a:rPr b="0"/><a:t>Slide</a:t></a:r>
+        <a:r><a:rPr b="0"/><a:t xml:space="preserve"> </a:t></a:r>
+        <a:r><a:rPr b="0"/><a:t>Guard</a:t></a:r>
+      </a:p></p:txBody>
+    </p:sp></p:spTree></p:cSld></p:sld>`);
+
+  const input = await zip.generateAsync({ type: 'arraybuffer' });
+  const result = await fixIssues(input, [{
+    rule: 'R008', page: 1, fixable: true,
+    fixData: { shapeId: '7', property: 'bold', textContent: 'Slide Guard' },
+  }]);
+
+  assert.equal(result.fixed, 1);
+  assert.equal(result.failed, 0);
+  const output = await JSZip.loadAsync(result.buffer);
+  const slideXml = await output.file('ppt/slides/slide1.xml').async('text');
+  assert.match(slideXml, /<a:t xml:space="preserve"> <\/a:t>/);
+});
 
 test('selectTitle does not treat an untyped body placeholder outside the title region as a title', () => {
   const body = {

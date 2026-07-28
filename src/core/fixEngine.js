@@ -217,7 +217,11 @@ function extractTextFromShape(sp) {
   let text = '';
   for (const p of pars) {
     const runs = p['a:r'] || [];
-    const runList = Array.isArray(runs) ? runs : [runs];
+    const fields = p['a:fld'] || [];
+    const runList = [
+      ...(Array.isArray(runs) ? runs : [runs]),
+      ...(Array.isArray(fields) ? fields : [fields]),
+    ].filter(Boolean);
     for (const r of runList) {
       text += r['a:t']?.['#text'] ?? r['a:t'] ?? '';
     }
@@ -238,7 +242,7 @@ function fixFont(sp, issue) {
   const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
   let changed = false;
 
-  const setFontProps = (rPr) => {
+  const setFontProps = (rPr, explicit = false) => {
     if (!rPr) return false;
     let mod = false;
     if (rPr['@_typeface'] && !isStandardFont(rPr['@_typeface'])) {
@@ -255,6 +259,21 @@ function fixFont(sp, issue) {
       ea['@_typeface'] = targetFont;
       mod = true;
     }
+    // A detected font can be inherited from list styles, layouts, masters or
+    // the theme. Writing both slots on the actual text run reliably overrides
+    // that inheritance without modifying shared master/theme definitions.
+    if (explicit && (!rPr['a:latin'] || rPr['a:latin']['@_typeface'] !== targetFont)) {
+      rPr['a:latin'] = { ...(rPr['a:latin'] || {}), '@_typeface': targetFont };
+      mod = true;
+    }
+    if (explicit && (!rPr['a:ea'] || rPr['a:ea']['@_typeface'] !== targetFont)) {
+      rPr['a:ea'] = { ...(rPr['a:ea'] || {}), '@_typeface': targetFont };
+      mod = true;
+    }
+    if (explicit && (!rPr['a:cs'] || rPr['a:cs']['@_typeface'] !== targetFont)) {
+      rPr['a:cs'] = { ...(rPr['a:cs'] || {}), '@_typeface': targetFont };
+      mod = true;
+    }
     return mod;
   };
 
@@ -268,10 +287,21 @@ function fixFont(sp, issue) {
 
     // 文本级 run 字体
     const runs = p['a:r'] || [];
-    const runList = Array.isArray(runs) ? runs : [runs];
+    const fields = p['a:fld'] || [];
+    const runList = [
+      ...(Array.isArray(runs) ? runs : [runs]),
+      ...(Array.isArray(fields) ? fields : [fields]),
+    ].filter(Boolean);
     for (const r of runList) {
-      const rPr = r['a:rPr'];
-      if (rPr && setFontProps(rPr)) changed = true;
+      // Only add explicit formatting to nodes that actually display text.
+      const text = r['a:t']?.['#text'] ?? r['a:t'];
+      if (text == null || String(text).length === 0) continue;
+      let rPr = r['a:rPr'] || r['rPr'];
+      if (!rPr) {
+        rPr = {};
+        r['a:rPr'] = rPr;
+      }
+      if (setFontProps(rPr, true)) changed = true;
     }
   }
 

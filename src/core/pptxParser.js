@@ -306,7 +306,13 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
       const pPr = p['a:pPr'] || p['pPr'] || {};
       const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
       const runs = p['a:r'] || [];
-      const runList = Array.isArray(runs) ? runs : [runs];
+      const fields = p['a:fld'] || [];
+      // Field nodes (slide number/date/etc.) carry text and run properties just
+      // like a:r and must participate in font scanning.
+      const runList = [
+        ...(Array.isArray(runs) ? runs : [runs]),
+        ...(Array.isArray(fields) ? fields : [fields]),
+      ].filter(Boolean);
       for (const r of runList) {
         const t = r['a:t']?.['#text'] ?? r['a:t'] ?? '';
         const start = fullText.length;
@@ -327,6 +333,13 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
         const runFont = rPr['@_typeface'] || rPr['a:ea']?.['@_typeface'] || rPr['a:latin']?.['@_typeface'] ||
           defRPr['@_typeface'] || defRPr['a:ea']?.['@_typeface'] || defRPr['a:latin']?.['@_typeface'] ||
           lstDefRPr?.['@_typeface'] || lstDefRPr?.['a:ea']?.['@_typeface'] || lstDefRPr?.['a:latin']?.['@_typeface'] || null;
+        const inheritedTypeface = rPr['@_typeface'] || defRPr['@_typeface'] || lstDefRPr?.['@_typeface'] || null;
+        const latinFont = rPr['a:latin']?.['@_typeface'] || inheritedTypeface ||
+          defRPr['a:latin']?.['@_typeface'] || lstDefRPr?.['a:latin']?.['@_typeface'] || null;
+        const eastAsianFont = rPr['a:ea']?.['@_typeface'] || inheritedTypeface ||
+          defRPr['a:ea']?.['@_typeface'] || lstDefRPr?.['a:ea']?.['@_typeface'] || null;
+        const complexFont = rPr['a:cs']?.['@_typeface'] || inheritedTypeface ||
+          defRPr['a:cs']?.['@_typeface'] || lstDefRPr?.['a:cs']?.['@_typeface'] || null;
         const runFill = rPr['a:solidFill'] || rPr['solidFill'] ||
           defRPr['a:solidFill'] || defRPr['solidFill'] ||
           lstDefRPr?.['a:solidFill'] || lstDefRPr?.['solidFill'] ||
@@ -339,6 +352,9 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
           end: fullText.length,
           text: String(t),
           fontName: runFont,
+          latinFont,
+          eastAsianFont,
+          complexFont,
           fontSize: rPr['@_sz'] ? parseFloat(rPr['@_sz']) / 100 : (defRPr['@_sz'] ? parseFloat(defRPr['@_sz']) / 100 : null),
           bold: readBold(rPr) ?? readBold(defRPr) ?? readBold(lstDefRPr),
           color: runColor,
@@ -348,7 +364,7 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
       if (!fontSize && defRPr['@_sz']) fontSize = parseFloat(defRPr['@_sz']) / 100;
       if (!fontName) fontName = defRPr['@_typeface'] || (defRPr['a:latin']?.['@_typeface']);
       // 段落换行
-      if (runs.length > 0) fullText += '\n';
+      if (runList.length > 0) fullText += '\n';
     }
 
     // 检查文本框级默认样式（lstStyle — 占位符/文本框的默认格式，PowerPoint 常用此层继承加粗）

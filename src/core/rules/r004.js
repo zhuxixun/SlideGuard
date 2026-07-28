@@ -15,6 +15,34 @@ export const rule = {
 
 const STANDARD_FONTS = ['微软雅黑', 'Microsoft YaHei', 'Microsoft YaHei UI'];
 
+function isStandardFont(font) {
+  return STANDARD_FONTS.some(f => f.toLowerCase() === String(font).trim().toLowerCase());
+}
+
+// Theme placeholders are not physical font names. They must be resolved via
+// the theme before they can be judged, so R004 must not report them directly.
+function isConcreteFont(font) {
+  return Boolean(font && String(font).trim() && !String(font).trim().startsWith('+'));
+}
+
+function fontsUsedByRun(run) {
+  const text = String(run.text || '');
+  const fonts = [];
+  // Han, Kana and Hangul characters use the East Asian font slot.
+  if (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u.test(text)) {
+    fonts.push(run.eastAsianFont || run.fontName);
+  }
+  // Arabic/Hebrew and related complex scripts use the complex-script slot.
+  if (/\p{Script=Arabic}|\p{Script=Hebrew}/u.test(text)) {
+    fonts.push(run.complexFont || run.fontName);
+  }
+  // Latin letters and digits use the Latin slot. For punctuation-only runs,
+  // fall back to the parser's best-known font instead of guessing a script.
+  if (/\p{Script=Latin}|[0-9]/u.test(text)) fonts.push(run.latinFont || run.fontName);
+  if (fonts.length === 0) fonts.push(run.fontName);
+  return fonts.filter(isConcreteFont);
+}
+
 /**
  * @param {Object} slide
  * @param {Object} presInfo
@@ -25,9 +53,12 @@ export function check(slide, presInfo) {
 
   for (const t of texts) {
     if (!t.text.trim()) continue;
-    const font = (t.fontName || '微软雅黑').trim();
+    const runFonts = (t.styleRuns || []).flatMap(fontsUsedByRun);
+    const candidates = runFonts.length ? runFonts : [t.fontName].filter(isConcreteFont);
+    const badFonts = [...new Set(candidates.map(font => String(font).trim()).filter(font => !isStandardFont(font)))];
 
-    if (!STANDARD_FONTS.some(f => f.toLowerCase() === font.toLowerCase())) {
+    if (badFonts.length) {
+      const font = badFonts.join('、');
       issues.push({
         rule: 'R004',
         type: '字体一致性',

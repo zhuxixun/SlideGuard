@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import JSZip from 'jszip';
-import { extractTexts, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
+import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
 const presInfo = { width: 10_000, height: 7_500 };
@@ -130,4 +130,18 @@ test('uses shape fontRef for text color and never confuses the shape background 
   const texts = extractTexts(slideXml, { accent1: '4472C4' });
   assert.equal(texts[0].styleRuns[0].color, '4472C4');
   assert.equal(check({ page: 1, texts }, presInfo).some(issue => issue.property === 'color'), true);
+});
+
+test('maps tx1 through the slide master clrMap before resolving the visual color', async () => {
+  const zip = new JSZip();
+  const layoutPath = 'ppt/slideLayouts/slideLayout1.xml';
+  zip.file('ppt/slideLayouts/slideLayout1.xml', '<p:sldLayout/>');
+  zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `
+    <Relationships><Relationship Type="x/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`);
+  zip.file('ppt/slideMasters/slideMaster1.xml', '<p:sldMaster><p:clrMap tx1="accent1" bg1="lt1"/></p:sldMaster>');
+
+  const maps = await getLayoutColorMap(zip, [layoutPath]);
+  assert.deepEqual(maps.get(layoutPath), { tx1: 'accent1', bg1: 'lt1' });
+  const colors = applyColorMap({ accent1: '4472C4', lt1: 'FFFFFF' }, maps.get(layoutPath));
+  assert.equal(resolveColor({ 'a:schemeClr': { '@_val': 'tx1' } }, colors), '4472C4');
 });

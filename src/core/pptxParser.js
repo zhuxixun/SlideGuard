@@ -328,7 +328,9 @@ export function extractTexts(slideXml, themeColors) {
           defRPr['a:solidFill'] || defRPr['solidFill'] ||
           lstDefRPr?.['a:solidFill'] || lstDefRPr?.['solidFill'] ||
           fontRef;
-        const runColor = resolveColor(runFill, themeColors);
+        // 没有直接颜色时，普通文本按主题文字色 tx1 渲染；tx1 已由母版 clrMap 映射。
+        const runColor = resolveColor(runFill, themeColors) ||
+          resolveColor({ 'a:schemeClr': { '@_val': 'tx1' } }, themeColors);
         styleRuns.push({
           start,
           end: fullText.length,
@@ -524,6 +526,57 @@ export async function getLayoutThemeMap(zip, layoutPaths) {
     }
   }
   return result;
+}
+
+function readColorMap(node) {
+  if (!node) return {};
+  const mapping = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith('@_') && typeof value === 'string') mapping[key.slice(2)] = value;
+  }
+  return mapping;
+}
+
+/** @returns {Promise<Map<string,Object>>} layoutPath → clrMap (tx1/bg1/... → dk1/lt1/...) */
+export async function getLayoutColorMap(zip, layoutPaths) {
+  const result = new Map();
+  const masterMaps = new Map();
+  for (const layoutPath of new Set(layoutPaths.filter(Boolean))) {
+    try {
+      const masterPath = await relatedPart(zip, layoutPath, 'slideMaster');
+      if (!masterPath) continue;
+      let mapping = masterMaps.get(masterPath);
+      if (!mapping) {
+        const file = zip.file(masterPath);
+        const parsed = file ? parser.parse(await file.async('text')) : {};
+        const master = parsed['p:sldMaster'] || parsed.sldMaster || parsed;
+        mapping = readColorMap(master['p:clrMap'] || master.clrMap);
+        masterMaps.set(masterPath, mapping);
+      }
+
+      // 版式可以用 overrideClrMapping 覆盖母版映射。
+      const layoutFile = zip.file(layoutPath);
+      if (layoutFile) {
+        const parsed = parser.parse(await layoutFile.async('text'));
+        const layout = parsed['p:sldLayout'] || parsed.sldLayout || parsed;
+        const override = layout['p:clrMapOvr'] || layout.clrMapOvr;
+        const overrideMap = readColorMap(override?.['a:overrideClrMapping'] || override?.overrideClrMapping);
+        if (Object.keys(overrideMap).length) mapping = { ...mapping, ...overrideMap };
+      }
+      result.set(layoutPath, mapping);
+    } catch (e) {
+      console.warn('[PptxParser] 解析版式颜色映射失败:', layoutPath, e.message);
+    }
+  }
+  return result;
+}
+
+export function applyColorMap(themeColors, colorMap) {
+  const resolved = { ...themeColors };
+  for (const [alias, target] of Object.entries(colorMap || {})) {
+    if (themeColors[target]) resolved[alias] = themeColors[target];
+  }
+  return resolved;
 }
 
 /**

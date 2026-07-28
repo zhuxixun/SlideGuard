@@ -127,13 +127,13 @@ export function collectSpElements(parent) {
  * @param {import('jszip')} zip
  * @returns {Promise<Object.<string, string>>} 如 { accent1: 'C00000', dk1: '000000', ... }
  */
-export async function parseThemeColors(zip) {
+export async function parseThemeColors(zip, themePath = null) {
   const colors = {};
 
   // 找到主题文件（通常 ppt/theme/theme1.xml）
   const themeFiles = [];
   zip.forEach((relPath, file) => {
-    if (/^ppt\/theme\/theme\d*\.xml$/i.test(relPath) && !file.dir) {
+    if ((!themePath || relPath === themePath) && /^ppt\/theme\/theme\d*\.xml$/i.test(relPath) && !file.dir) {
       themeFiles.push(relPath);
     }
   });
@@ -212,7 +212,8 @@ export function extractTexts(slideXml, themeColors) {
     const nvs = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
     const nvsPr = nvs['p:nvPr'] || nvs['nvPr'] || {};
     const ph = nvsPr['p:ph'] || nvsPr['ph'];
-    const phType = ph?.['@_type'] || null;
+    // ECMA-376: p:ph 未声明 type 时默认是 obj，而不是 title。
+    const phType = ph ? (ph['@_type'] || 'obj') : null;
 
     // 提取位置
     const spPr = sp['p:spPr'] || sp['spPr'] || {};
@@ -362,7 +363,7 @@ export async function extractLayoutTitlePositions(zip) {
         const ph = nvsPr['p:ph'] || nvsPr['ph'];
         if (!ph) continue;
         const phType = ph['@_type'];
-        if (phType === 'title' || phType === 'ctrTitle' || phType === undefined) {
+        if (phType === 'title' || phType === 'ctrTitle') {
           const spPr = sp['p:spPr'] || sp['spPr'] || {};
           const xfrm = spPr['a:xfrm'] || spPr['xfrm'] || {};
           const off = xfrm['a:off'] || xfrm['off'] || {};
@@ -419,6 +420,55 @@ export async function getSlideLayoutMap(zip, slideCount) {
     }
   }
   return map;
+}
+
+function resolvePartTarget(sourcePart, target) {
+  if (!target) return null;
+  if (target.startsWith('/')) return target.slice(1);
+  const parts = sourcePart.split('/');
+  parts.pop();
+  for (const part of target.replace(/\\/g, '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+async function relatedPart(zip, sourcePart, relationshipType) {
+  const slash = sourcePart.lastIndexOf('/');
+  const relsPath = `${sourcePart.slice(0, slash)}/_rels/${sourcePart.slice(slash + 1)}.rels`;
+  const file = zip.file(relsPath);
+  if (!file) return null;
+  const parsed = parser.parse(await file.async('text'));
+  const value = (parsed.Relationships || {}).Relationship;
+  const relationships = Array.isArray(value) ? value : (value ? [value] : []);
+  const relationship = relationships.find(rel => rel['@_Type']?.includes(relationshipType));
+  return relationship ? resolvePartTarget(sourcePart, relationship['@_Target']) : null;
+}
+
+/**
+ * 按幻灯片版式追踪到对应主题。一个 PPTX 可以有多个母版和主题，不能全局使用 theme1。
+ * @returns {Promise<Map<string,string>>} layoutPath → themePath
+ */
+export async function getLayoutThemeMap(zip, layoutPaths) {
+  const result = new Map();
+  const masterThemes = new Map();
+  for (const layoutPath of new Set(layoutPaths.filter(Boolean))) {
+    try {
+      const masterPath = await relatedPart(zip, layoutPath, 'slideMaster');
+      if (!masterPath) continue;
+      let themePath = masterThemes.get(masterPath);
+      if (themePath === undefined) {
+        themePath = await relatedPart(zip, masterPath, '/theme') || null;
+        masterThemes.set(masterPath, themePath);
+      }
+      if (themePath) result.set(layoutPath, themePath);
+    } catch (e) {
+      console.warn('[PptxParser] 解析版式主题关系失败:', layoutPath, e.message);
+    }
+  }
+  return result;
 }
 
 /**

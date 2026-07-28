@@ -9,7 +9,7 @@
  *   5. 汇总结果
  */
 import JSZip from 'jszip';
-import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, parseThemeColors } from './pptxParser.js';
+import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, getLayoutThemeMap, parseThemeColors } from './pptxParser.js';
 import { store } from '../store.js';
 
 /* 规则注册表 */
@@ -65,18 +65,25 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   const layoutTitlePositions = await extractLayoutTitlePositions(zip);
   const slideLayoutMap = await getSlideLayoutMap(zip, slideCount);
 
-  // 解析主题配色（用于 resolveColor 将 schemeClr 转为实际 RGB）
-  const themeColors = await parseThemeColors(zip);
+  // 每个母版可以关联不同主题；逐版式解析，不能把 theme1 套到所有页面。
+  const layoutThemeMap = await getLayoutThemeMap(zip, slideLayoutMap);
+  const fallbackThemeColors = await parseThemeColors(zip);
+  const themeColorsByPath = new Map();
+  for (const themePath of new Set(layoutThemeMap.values())) {
+    themeColorsByPath.set(themePath, await parseThemeColors(zip, themePath));
+  }
 
   const slides = [];
   for (let i = 0; i < slideCount; i++) {
     if (cancelled()) return abortResult();
     try {
       const slideXml = await loadSlide(zip, i);
+      const layoutPath = slideLayoutMap[i];
+      const themePath = layoutPath ? layoutThemeMap.get(layoutPath) : null;
+      const themeColors = (themePath && themeColorsByPath.get(themePath)) || fallbackThemeColors;
       const texts = extractTexts(slideXml, themeColors);
       const shapes = extractShapes(slideXml);
       // 获取该幻灯片关联的版式标题占位符位置
-      const layoutPath = slideLayoutMap[i];
       const layoutTitlePos = layoutPath ? layoutTitlePositions.get(layoutPath) : null;
       slides.push({ index: i, page: i + 1, texts, shapes, hasHidden: false, layoutTitlePos, layoutPath });
     } catch (e) {

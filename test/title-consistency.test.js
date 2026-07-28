@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { extractTexts } from '../src/core/pptxParser.js';
+import JSZip from 'jszip';
+import { extractTexts, getLayoutThemeMap, parseThemeColors } from '../src/core/pptxParser.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
 const presInfo = { width: 10_000, height: 7_500 };
@@ -17,6 +18,28 @@ test('selectTitle does not treat an untyped body placeholder outside the title r
   };
 
   assert.equal(selectTitle({ texts: [body, title] }, presInfo), title);
+});
+
+test('selectTitle prefers an explicit title and rejects object placeholders in the title region', () => {
+  const body = { text: '大字号正文', phType: 'obj', x: 500, y: 300, w: 9000, h: 800, fontSize: 40 };
+  const title = { text: '真实标题', phType: 'title', x: 500, y: 500, w: 9000, h: 800, fontSize: 24 };
+  assert.equal(selectTitle({ texts: [body, title] }, presInfo), title);
+  assert.equal(selectTitle({ texts: [body] }, presInfo), null);
+});
+
+test('uses the theme related through each layout and slide master', async () => {
+  const zip = new JSZip();
+  zip.file('ppt/slideLayouts/_rels/slideLayout2.xml.rels', `
+    <Relationships><Relationship Type="x/slideMaster" Target="../slideMasters/slideMaster2.xml"/></Relationships>`);
+  zip.file('ppt/slideMasters/_rels/slideMaster2.xml.rels', `
+    <Relationships><Relationship Type="x/theme" Target="../theme/theme2.xml"/></Relationships>`);
+  zip.file('ppt/theme/theme1.xml', `<a:theme><a:themeElements><a:clrScheme><a:accent1><a:srgbClr val="C00000"/></a:accent1></a:clrScheme></a:themeElements></a:theme>`);
+  zip.file('ppt/theme/theme2.xml', `<a:theme><a:themeElements><a:clrScheme><a:accent1><a:srgbClr val="4472C4"/></a:accent1></a:clrScheme></a:themeElements></a:theme>`);
+
+  const layoutPath = 'ppt/slideLayouts/slideLayout2.xml';
+  const map = await getLayoutThemeMap(zip, [layoutPath]);
+  assert.equal(map.get(layoutPath), 'ppt/theme/theme2.xml');
+  assert.deepEqual(await parseThemeColors(zip, map.get(layoutPath)), { accent1: '4472C4' });
 });
 
 test('extractTexts resolves schemeClr before R008 checks the title color', () => {

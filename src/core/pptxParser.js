@@ -150,11 +150,16 @@ export async function parseThemeColors(zip) {
       const clrScheme = themeEl['a:clrScheme'] || themeEl['clrScheme'];
       if (!clrScheme) continue;
 
-      // 遍历配色子元素：dk1 / lt1 / accent1 / accent2 / folHlink / hlink 等
+      // 遍历配色子元素：a:dk1 / a:lt1 / a:accent1 / a:accent2 / a:folHlink / a:hlink 等
+      // 注意：fast-xml-parser 默认保留命名空间前缀（removeNSPrefix: false），所以 key 形如 "a:dk1"
+      // 但 schemeClr 的 val 属性不带前缀（"dk1"），因此存储时需去掉前缀以匹配 resolveColor 的查询
       for (const [key, value] of Object.entries(clrScheme)) {
         if (key.startsWith('@_') || key === 'a:extLst' || key === 'extLst') continue;
         const val = value?.['a:srgbClr']?.['@_val'] || value?.['srgbClr']?.['@_val'];
-        if (val) colors[key] = val.toUpperCase();
+        if (val) {
+          const colorName = key.includes(':') ? key.split(':').pop() : key;
+          colors[colorName] = val.toUpperCase();
+        }
       }
       break; // 只取第一个主题文件
     } catch (e) {
@@ -180,7 +185,8 @@ function resolveColor(fill, themeColors) {
   const scheme = fill['a:schemeClr'] || fill['schemeClr'];
   if (scheme && themeColors) {
     const name = scheme['@_val'];
-    return themeColors[name] || null;
+    // 兼容带/不带命名空间前缀的两种 key 形式（a:dk1 与 dk1）
+    return themeColors[name] || themeColors['a:' + name] || null;
   }
   return null;
 }
@@ -262,7 +268,10 @@ export function extractTexts(slideXml, themeColors) {
         const runFont = rPr['@_typeface'] || rPr['a:ea']?.['@_typeface'] || rPr['a:latin']?.['@_typeface'] ||
           defRPr['@_typeface'] || defRPr['a:ea']?.['@_typeface'] || defRPr['a:latin']?.['@_typeface'] ||
           lstDefRPr?.['@_typeface'] || lstDefRPr?.['a:ea']?.['@_typeface'] || lstDefRPr?.['a:latin']?.['@_typeface'] || null;
-        const runFill = rPr['a:solidFill'] || defRPr['a:solidFill'] || lstDefRPr?.['a:solidFill'];
+        const runFill = rPr['a:solidFill'] || rPr['solidFill'] ||
+          defRPr['a:solidFill'] || defRPr['solidFill'] ||
+          lstDefRPr?.['a:solidFill'] || lstDefRPr?.['solidFill'] ||
+          spPr['a:solidFill'] || spPr['solidFill'];
         const runColor = resolveColor(runFill, themeColors);
         styleRuns.push({
           start,
@@ -290,6 +299,13 @@ export function extractTexts(slideXml, themeColors) {
         const c = resolveColor(solidFill, themeColors);
         if (c) color = c;
       }
+    }
+
+    // 形状级填充兜底（文本可能仅从 spPr 继承颜色）
+    if (!color) {
+      const solidFill = spPr['a:solidFill'] || spPr['solidFill'];
+      const c = resolveColor(solidFill, themeColors);
+      if (c) color = c;
     }
 
     if (fullText.trim()) {

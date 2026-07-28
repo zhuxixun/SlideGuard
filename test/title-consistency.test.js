@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import JSZip from 'jszip';
-import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
+import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutTextColorStyles, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
 const presInfo = { width: 10_000, height: 7_500 };
@@ -144,4 +144,17 @@ test('maps tx1 through the slide master clrMap before resolving the visual color
   assert.deepEqual(maps.get(layoutPath), { tx1: 'accent1', bg1: 'lt1' });
   const colors = applyColorMap({ accent1: '4472C4', lt1: 'FFFFFF' }, maps.get(layoutPath));
   assert.equal(resolveColor({ 'a:schemeClr': { '@_val': 'tx1' } }, colors), '4472C4');
+});
+
+test('inherits ordinary text color from the slide master otherStyle', async () => {
+  const zip = new JSZip();
+  const layoutPath = 'ppt/slideLayouts/slideLayout1.xml';
+  zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `
+    <Relationships><Relationship Type="x/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`);
+  zip.file('ppt/slideMasters/slideMaster1.xml', `<p:sldMaster><p:txStyles>
+    <p:otherStyle><a:lvl1pPr><a:defRPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:defRPr></a:lvl1pPr></p:otherStyle>
+  </p:txStyles></p:sldMaster>`);
+  const styles = await getLayoutTextColorStyles(zip, [layoutPath]);
+  const fill = styles.get(layoutPath).other;
+  assert.equal(resolveColor(fill, { accent1: '4472C4' }), '4472C4');
 });

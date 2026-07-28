@@ -251,7 +251,7 @@ export function resolveColor(fill, themeColors) {
  * @param {Object.<string,string>} [themeColors] - 主题配色映射（可选，用于解析 schemeClr）
  * @returns {Array<{text, fontSize, fontName, bold, color, x, y, w, h, phType}>}
  */
-export function extractTexts(slideXml, themeColors) {
+export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
   const texts = [];
   const slide = slideXml['p:sld'] || slideXml['sld'] || slideXml;
   const spTree = slide['p:cSld']?.['p:spTree'] || slide['cSld']?.['spTree'] || {};
@@ -268,6 +268,9 @@ export function extractTexts(slideXml, themeColors) {
     const ph = nvsPr['p:ph'] || nvsPr['ph'];
     // ECMA-376: p:ph 未声明 type 时默认是 obj，而不是 title。
     const phType = ph ? (ph['@_type'] || 'obj') : null;
+    const inheritedFill = (phType === 'title' || phType === 'ctrTitle')
+      ? inheritedTextColors.title
+      : (phType ? inheritedTextColors.body : inheritedTextColors.other);
 
     // 提取位置
     const spPr = sp['p:spPr'] || sp['spPr'] || {};
@@ -327,7 +330,7 @@ export function extractTexts(slideXml, themeColors) {
         const runFill = rPr['a:solidFill'] || rPr['solidFill'] ||
           defRPr['a:solidFill'] || defRPr['solidFill'] ||
           lstDefRPr?.['a:solidFill'] || lstDefRPr?.['solidFill'] ||
-          fontRef;
+          fontRef || inheritedFill;
         // 没有直接颜色时，普通文本按主题文字色 tx1 渲染；tx1 已由母版 clrMap 映射。
         const runColor = resolveColor(runFill, themeColors) ||
           resolveColor({ 'a:schemeClr': { '@_val': 'tx1' } }, themeColors);
@@ -361,7 +364,7 @@ export function extractTexts(slideXml, themeColors) {
 
     // 形状样式的 fontRef 是文本颜色；spPr/solidFill 是形状背景色，不能当作文字颜色。
     if (!color) {
-      const c = resolveColor(fontRef, themeColors);
+      const c = resolveColor(fontRef || inheritedFill, themeColors);
       if (c) color = c;
     }
 
@@ -566,6 +569,46 @@ export async function getLayoutColorMap(zip, layoutPaths) {
       result.set(layoutPath, mapping);
     } catch (e) {
       console.warn('[PptxParser] 解析版式颜色映射失败:', layoutPath, e.message);
+    }
+  }
+  return result;
+}
+
+function textStyleFill(style) {
+  if (!style) return null;
+  for (let level = 1; level <= 9; level++) {
+    const pPr = style[`a:lvl${level}pPr`] || style[`lvl${level}pPr`];
+    const rPr = pPr?.['a:defRPr'] || pPr?.defRPr;
+    const fill = rPr?.['a:solidFill'] || rPr?.solidFill;
+    if (fill) return fill;
+  }
+  return null;
+}
+
+/** 读取母版的 titleStyle/bodyStyle/otherStyle 文字颜色继承。 */
+export async function getLayoutTextColorStyles(zip, layoutPaths) {
+  const result = new Map();
+  const masterStyles = new Map();
+  for (const layoutPath of new Set(layoutPaths.filter(Boolean))) {
+    try {
+      const masterPath = await relatedPart(zip, layoutPath, 'slideMaster');
+      if (!masterPath) continue;
+      let styles = masterStyles.get(masterPath);
+      if (!styles) {
+        const file = zip.file(masterPath);
+        const parsed = file ? parser.parse(await file.async('text')) : {};
+        const master = parsed['p:sldMaster'] || parsed.sldMaster || parsed;
+        const txStyles = master['p:txStyles'] || master.txStyles || {};
+        styles = {
+          title: textStyleFill(txStyles['p:titleStyle'] || txStyles.titleStyle),
+          body: textStyleFill(txStyles['p:bodyStyle'] || txStyles.bodyStyle),
+          other: textStyleFill(txStyles['p:otherStyle'] || txStyles.otherStyle),
+        };
+        masterStyles.set(masterPath, styles);
+      }
+      result.set(layoutPath, styles);
+    } catch (e) {
+      console.warn('[PptxParser] 解析母版文本颜色失败:', layoutPath, e.message);
     }
   }
   return result;

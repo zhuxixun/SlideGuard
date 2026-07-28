@@ -80,8 +80,8 @@ export function check(slide, presInfo, context = {}) {
   }
   const badBold = runs.filter(r => r.bold === false);
   if (badBold.length) issues.push(issue(title, slide, 'bold', '未加粗', '加粗', rangesFor(title, r => r.bold === false)));
-  const badColors = runs.filter(r => r.color && r.color.toUpperCase() !== STANDARD_COLOR);
-  if (badColors.length) issues.push(issue(title, slide, 'color', [...new Set(badColors.map(r => `#${r.color}`))].join('、'), '#C00000 (RGB 192,0,0)', rangesFor(title, r => r.color && r.color.toUpperCase() !== STANDARD_COLOR)));
+  const badColors = runs.filter(r => !r.color || r.color.toUpperCase() !== STANDARD_COLOR);
+  if (badColors.length) issues.push(issue(title, slide, 'color', [...new Set(badColors.map(r => r.color ? `#${r.color}` : '无法解析（继承颜色）'))].join('、'), '#C00000 (RGB 192,0,0)', rangesFor(title, r => !r.color || r.color.toUpperCase() !== STANDARD_COLOR)));
   return issues;
 }
 

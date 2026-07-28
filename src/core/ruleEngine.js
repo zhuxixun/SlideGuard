@@ -9,7 +9,7 @@
  *   5. 汇总结果
  */
 import JSZip from 'jszip';
-import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, getLayoutThemeMap, getLayoutColorMap, applyColorMap, parseThemeColors } from './pptxParser.js';
+import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, getLayoutThemeMap, getLayoutColorMap, getLayoutTextColorStyles, applyColorMap, parseThemeColors } from './pptxParser.js';
 import { store } from '../store.js';
 
 /* 规则注册表 */
@@ -68,6 +68,7 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   // 每个母版可以关联不同主题；逐版式解析，不能把 theme1 套到所有页面。
   const layoutThemeMap = await getLayoutThemeMap(zip, slideLayoutMap);
   const layoutColorMap = await getLayoutColorMap(zip, slideLayoutMap);
+  const layoutTextColorStyles = await getLayoutTextColorStyles(zip, slideLayoutMap);
   const fallbackThemeColors = await parseThemeColors(zip);
   const themeColorsByPath = new Map();
   for (const themePath of new Set(layoutThemeMap.values())) {
@@ -83,7 +84,7 @@ export async function runScan(pptxData, ruleIds, options = {}) {
       const themePath = layoutPath ? layoutThemeMap.get(layoutPath) : null;
       const baseThemeColors = (themePath && themeColorsByPath.get(themePath)) || fallbackThemeColors;
       const themeColors = applyColorMap(baseThemeColors, layoutColorMap.get(layoutPath));
-      const texts = extractTexts(slideXml, themeColors);
+      const texts = extractTexts(slideXml, themeColors, layoutTextColorStyles.get(layoutPath));
       const shapes = extractShapes(slideXml);
       // 获取该幻灯片关联的版式标题占位符位置
       const layoutTitlePos = layoutPath ? layoutTitlePositions.get(layoutPath) : null;

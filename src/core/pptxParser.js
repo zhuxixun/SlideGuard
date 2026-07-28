@@ -123,11 +123,75 @@ export function collectSpElements(parent) {
 }
 
 /**
+ * 解析主题配色方案（schemeClr → 实际 RGB）
+ * @param {import('jszip')} zip
+ * @returns {Promise<Object.<string, string>>} 如 { accent1: 'C00000', dk1: '000000', ... }
+ */
+export async function parseThemeColors(zip) {
+  const colors = {};
+
+  // 找到主题文件（通常 ppt/theme/theme1.xml）
+  const themeFiles = [];
+  zip.forEach((relPath, file) => {
+    if (/^ppt\/theme\/theme\d*\.xml$/i.test(relPath) && !file.dir) {
+      themeFiles.push(relPath);
+    }
+  });
+
+  for (const path of themeFiles) {
+    try {
+      const file = zip.file(path);
+      if (!file) continue;
+      const xml = await file.async('text');
+      const parsed = parser.parse(xml);
+      const theme = parsed['a:theme'] || parsed['theme'] || parsed;
+      const themeEl = theme['a:themeElements'] || theme['themeElements'];
+      if (!themeEl) continue;
+      const clrScheme = themeEl['a:clrScheme'] || themeEl['clrScheme'];
+      if (!clrScheme) continue;
+
+      // 遍历配色子元素：dk1 / lt1 / accent1 / accent2 / folHlink / hlink 等
+      for (const [key, value] of Object.entries(clrScheme)) {
+        if (key.startsWith('@_') || key === 'a:extLst' || key === 'extLst') continue;
+        const val = value?.['a:srgbClr']?.['@_val'] || value?.['srgbClr']?.['@_val'];
+        if (val) colors[key] = val.toUpperCase();
+      }
+      break; // 只取第一个主题文件
+    } catch (e) {
+      console.warn('[PptxParser] 解析主题配色失败:', path, e.message);
+    }
+  }
+
+  return colors;
+}
+
+/**
+ * 解析 solidFill 获取实际颜色值（支持 srgbClr 和 schemeClr）
+ * @param {Object} fill
+ * @param {Object.<string,string>} [themeColors]
+ * @returns {string|null}
+ */
+function resolveColor(fill, themeColors) {
+  if (!fill) return null;
+  // 显式 RGB
+  const srgb = fill['a:srgbClr'] || fill['srgbClr'];
+  if (srgb) return srgb['@_val'] || null;
+  // 主题色引用
+  const scheme = fill['a:schemeClr'] || fill['schemeClr'];
+  if (scheme && themeColors) {
+    const name = scheme['@_val'];
+    return themeColors[name] || null;
+  }
+  return null;
+}
+
+/**
  * 从幻灯片对象中提取文本元素
  * @param {Object} slideXml - 解析后的幻灯片 XML
+ * @param {Object.<string,string>} [themeColors] - 主题配色映射（可选，用于解析 schemeClr）
  * @returns {Array<{text, fontSize, fontName, bold, color, x, y, w, h, isTitle}>}
  */
-export function extractTexts(slideXml) {
+export function extractTexts(slideXml, themeColors) {
   const texts = [];
   const slide = slideXml['p:sld'] || slideXml['sld'] || slideXml;
   const spTree = slide['p:cSld']?.['p:spTree'] || slide['cSld']?.['spTree'] || {};
@@ -192,14 +256,14 @@ export function extractTexts(slideXml) {
         );
         if (!color) {
           const solidFill = rPr['a:solidFill'] || rPr['solidFill'];
-          const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];
-          if (srgb) color = srgb['@_val'];
+          const c = resolveColor(solidFill, themeColors);
+          if (c) color = c;
         }
         const runFont = rPr['@_typeface'] || rPr['a:ea']?.['@_typeface'] || rPr['a:latin']?.['@_typeface'] ||
           defRPr['@_typeface'] || defRPr['a:ea']?.['@_typeface'] || defRPr['a:latin']?.['@_typeface'] ||
           lstDefRPr?.['@_typeface'] || lstDefRPr?.['a:ea']?.['@_typeface'] || lstDefRPr?.['a:latin']?.['@_typeface'] || null;
         const runFill = rPr['a:solidFill'] || defRPr['a:solidFill'] || lstDefRPr?.['a:solidFill'];
-        const runColor = runFill?.['a:srgbClr']?.['@_val'] || null;
+        const runColor = resolveColor(runFill, themeColors);
         styleRuns.push({
           start,
           end: fullText.length,
@@ -223,8 +287,8 @@ export function extractTexts(slideXml) {
       if (!fontName) fontName = lstDefRPr['@_typeface'] || (lstDefRPr['a:latin']?.['@_typeface']);
       if (!color) {
         const solidFill = lstDefRPr['a:solidFill'] || lstDefRPr['solidFill'];
-        const srgb = solidFill?.['a:srgbClr'] || solidFill?.['srgbClr'];
-        if (srgb) color = srgb['@_val'];
+        const c = resolveColor(solidFill, themeColors);
+        if (c) color = c;
       }
     }
 

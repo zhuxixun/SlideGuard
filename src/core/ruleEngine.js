@@ -9,7 +9,7 @@
  *   5. 汇总结果
  */
 import JSZip from 'jszip';
-import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap } from './pptxParser.js';
+import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, parseThemeColors } from './pptxParser.js';
 import { store } from '../store.js';
 
 /* 规则注册表 */
@@ -65,12 +65,15 @@ export async function runScan(pptxData, ruleIds, options = {}) {
   const layoutTitlePositions = await extractLayoutTitlePositions(zip);
   const slideLayoutMap = await getSlideLayoutMap(zip, slideCount);
 
+  // 解析主题配色（用于 resolveColor 将 schemeClr 转为实际 RGB）
+  const themeColors = await parseThemeColors(zip);
+
   const slides = [];
   for (let i = 0; i < slideCount; i++) {
     if (cancelled()) return abortResult();
     try {
       const slideXml = await loadSlide(zip, i);
-      const texts = extractTexts(slideXml);
+      const texts = extractTexts(slideXml, themeColors);
       const shapes = extractShapes(slideXml);
       // 获取该幻灯片关联的版式标题占位符位置
       const layoutPath = slideLayoutMap[i];

@@ -4,6 +4,7 @@
  * 将提取的文本/形状位置数据转换为可视化 HTML。
  * 坐标系：EMU → px，支持 16:9 / 4:3 比例。
  */
+import { selectTitle } from '../core/rules/r008.js';
 
 /**
  * 渲染单页幻灯片预览 HTML
@@ -213,7 +214,7 @@ export function renderThumbnail(slide, presInfo, thumbWidth, isActive) {
  * 根据问题描述在 slide 中定位对应的文本或形状元素
  * @returns {number} 文本/形状元素索引，-1 表示未找到
  */
-export function findHighlightIndex(slide, issue) {
+export function findHighlightIndex(slide, issue, presInfo) {
   if (!slide || !issue) return -1;
   const texts = slide.texts || [];
   const shapes = slide.shapes || [];
@@ -247,8 +248,11 @@ export function findHighlightIndex(slide, issue) {
 
   // 类型匹配 — 标题问题找标题
   if (issue.rule === 'R008' && (issue.type === '标题一致性' || desc.includes('标题'))) {
-    const idx = texts.findIndex(t => t.isTitle);
-    if (idx >= 0) return idx;
+    const title = presInfo ? selectTitle(slide, presInfo) : null;
+    if (title) {
+      const idx = texts.findIndex(t => t.shapeId === title.shapeId);
+      if (idx >= 0) return idx;
+    }
   }
 
   // 字体匹配（R004：找使用了该非标准字体的文本）

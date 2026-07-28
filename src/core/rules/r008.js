@@ -16,13 +16,11 @@ function intersectionRatio(box, region) {
   return box.w > 0 && box.h > 0 ? area / (box.w * box.h) : 0;
 }
 
-function selectTitle(slide, presInfo) {
+export function selectTitle(slide, presInfo) {
   const nonEmpty = slide.texts.filter(t => t.text?.trim());
-  const placeholders = nonEmpty.filter(t => t.isTitle);
-  if (placeholders.length) return placeholders[0];
 
   function candidatesByRegion(region) {
-    return nonEmpty.filter(t => !t.phType && intersectionRatio({
+    return nonEmpty.filter(t => intersectionRatio({
       x: t.visibleX ?? t.x, y: t.visibleY ?? t.y,
       w: t.visibleW ?? t.w, h: t.visibleH ?? t.h,
     }, region) >= .5);
@@ -52,7 +50,7 @@ function issue(title, slide, property, actual, expected, ranges) {
   const label = labels[property];
   return {
     rule: 'R008', type: '标题一致性检查', level: 's1', page: slide.page,
-    object: title.isTitle ? '标题占位符' : '标题文本框',
+    object: (title.phType === 'title' || title.phType === 'ctrTitle') ? '标题占位符' : '标题文本框',
     desc: `第 ${slide.page} 页标题${label}不符合规范`,
     detail: `标题“${title.text.slice(0, 40)}”的${label}不符合标准${ranges ? `，命中字符范围：${ranges}` : ''}`,
     actual, expected, source: '内置规则集 builtin-rules-v1.0',

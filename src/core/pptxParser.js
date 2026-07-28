@@ -195,7 +195,7 @@ function resolveColor(fill, themeColors) {
  * 从幻灯片对象中提取文本元素
  * @param {Object} slideXml - 解析后的幻灯片 XML
  * @param {Object.<string,string>} [themeColors] - 主题配色映射（可选，用于解析 schemeClr）
- * @returns {Array<{text, fontSize, fontName, bold, color, x, y, w, h, isTitle}>}
+ * @returns {Array<{text, fontSize, fontName, bold, color, x, y, w, h, phType}>}
  */
 export function extractTexts(slideXml, themeColors) {
   const texts = [];
@@ -212,8 +212,7 @@ export function extractTexts(slideXml, themeColors) {
     const nvs = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
     const nvsPr = nvs['p:nvPr'] || nvs['nvPr'] || {};
     const ph = nvsPr['p:ph'] || nvsPr['ph'];
-    const isTitle = ph && (ph['@_type'] === 'title' || ph['@_type'] === 'ctrTitle');
-    const phType = ph?.['@_type'] || (ph ? 'title' : null);
+    const phType = ph?.['@_type'] || null;
 
     // 提取位置
     const spPr = sp['p:spPr'] || sp['spPr'] || {};
@@ -316,7 +315,6 @@ export function extractTexts(slideXml, themeColors) {
         bold,
         color,
         x, y, w, h, rotation, visibleX, visibleY, visibleW, visibleH,
-        isTitle,
         phType,
         styleRuns,
         shapeId: sp['@_id'] || nvs['p:cNvPr']?.['@_id'] || nvs['cNvPr']?.['@_id'],

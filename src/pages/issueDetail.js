@@ -44,7 +44,7 @@ export function renderIssueDetail(state) {
   const slides = state.slidePreviews || [];
   const presInfo = state.presInfo || { width: 12192000, height: 6858000 };
   const curSlide = slides.find(slide => slide.page === issue.page) || { page: issue.page, texts: [], shapes: [] };
-  const hlIdx = findHighlightIndex(curSlide, issue);
+  const hlIdx = findHighlightIndex(curSlide, issue, presInfo);
   const hlPos = hlIdx < 0 ? getHighlightPosition(curSlide, issue) : null;
   const hasPreview = curSlide.texts.length > 0 || curSlide.shapes.length > 0;
   const located = hasPreview && (hlIdx >= 0 || Boolean(hlPos));

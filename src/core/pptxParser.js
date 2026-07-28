@@ -259,7 +259,8 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
   // 递归收集所有形状（含组合内的子元素）
   const list = collectSpElements(spTree);
 
-  for (const sp of list) {
+  for (let shapeIndex = 0; shapeIndex < list.length; shapeIndex++) {
+    const sp = list[shapeIndex];
     if (!sp) continue;
 
     // 检查是否是占位符
@@ -394,6 +395,7 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
         x, y, w, h, rotation, visibleX, visibleY, visibleW, visibleH,
         phType,
         styleRuns,
+        shapeIndex,
         shapeId: sp['@_id'] || nvs['p:cNvPr']?.['@_id'] || nvs['cNvPr']?.['@_id'],
       });
     }

@@ -4,7 +4,7 @@ export const rule = {
   pageLevel: true, crossPage: false,
 };
 
-const STANDARD_FONTS = ['微软雅黑', 'Microsoft YaHei', 'Microsoft YaHei UI'];
+const STANDARD_FONTS = ['微软雅黑', 'Microsoft YaHei'];
 const STANDARD_COLOR = 'C00000';
 
 function intersectionRatio(box, region) {
@@ -61,7 +61,7 @@ function issue(title, slide, property, actual, expected, ranges) {
     actual, expected, source: '内置规则集 builtin-rules-v1.0',
     reason: `标题${label}不符合企业规范`, suggestion: `自动将标题${label}统一为${expected}`,
     fixable: true, status: '待处理', property, charRanges: ranges || '全部可识别字符',
-    fixData: { page: slide.page - 1, shapeId: title.shapeId, textContent: title.text,
+    fixData: { page: slide.page - 1, shapeIndex: title.shapeIndex, shapeId: title.shapeId, textContent: title.text,
       x: title.x, y: title.y, w: title.w, h: title.h, property },
   };
 }

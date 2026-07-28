@@ -154,22 +154,25 @@ function applyFix(xmlObj, issue) {
   // 递归收集所有形状（含组合形状 grpSp 内的子元素），与扫描时的 extractTexts 保持一致的查找逻辑
   const shapeList = collectSpElements(spTree);
 
-  for (const sp of shapeList) {
+  const candidates = [];
+  for (let shapeIndex = 0; shapeIndex < shapeList.length; shapeIndex++) {
+    const sp = shapeList[shapeIndex];
     if (!sp) continue;
 
     // 获取 shapeId: OOXML 中 id 在 p:nvSpPr > p:cNvPr 的 @_id 属性上，不在 <p:sp> 本身
     const nvSpPr = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
     const cNvPr = nvSpPr['p:cNvPr'] || nvSpPr['cNvPr'] || {};
     const spId = cNvPr['@_id'];
-    const matchesId = issue.fixData && issue.fixData.shapeId && String(spId) === String(issue.fixData.shapeId);
+    const matchesIndex = Number.isInteger(issue.fixData?.shapeIndex) && shapeIndex === issue.fixData.shapeIndex;
+    const matchesId = issue.fixData?.shapeId != null && String(spId) === String(issue.fixData.shapeId);
 
     // 内容匹配（备用策略：检查文本内容是否匹配）
     let matchesText = false;
-    if (!matchesId) {
+    if (issue.fixData?.textContent != null) {
       const txBody = sp['p:txBody'] || sp['txBody'];
-      if (txBody && issue.fixData?.textContent) {
+      if (txBody) {
         const textContent = extractTextFromShape(sp).replace(/\n/g, '');
-        const targetText = issue.fixData.textContent.replace(/\n/g, '');
+        const targetText = String(issue.fixData.textContent).trim().replace(/\n/g, '');
         if (textContent && textContent === targetText) {
           matchesText = true;
         }
@@ -178,7 +181,7 @@ function applyFix(xmlObj, issue) {
 
     // 位置匹配（最后备用：按 EMU 坐标位置匹配，允许 1pt 误差）
     let matchesPosition = false;
-    if (!matchesId && !matchesText && issue.fixData?.x != null && issue.fixData?.y != null) {
+    if (issue.fixData?.x != null && issue.fixData?.y != null) {
       const spPr = sp['p:spPr'] || sp['spPr'] || {};
       const xfrm = spPr['a:xfrm'] || spPr['xfrm'] || {};
       const off = xfrm['a:off'] || xfrm['off'] || {};
@@ -190,7 +193,18 @@ function applyFix(xmlObj, issue) {
       }
     }
 
-    if (!matchesId && !matchesText && !matchesPosition) continue;
+    if (!matchesIndex && !matchesId && !matchesText && !matchesPosition) continue;
+
+    const score = (matchesIndex ? 1000 : 0) + (matchesId ? 100 : 0) +
+      (matchesText ? 20 : 0) + (matchesPosition ? 5 : 0);
+    candidates.push({ sp, score, shapeIndex });
+  }
+
+  // Select only after considering all shapes. This avoids modifying the first
+  // shape carrying a duplicated cNvPr id while leaving the scanned shape
+  // (and its Arial/Calibri runs) untouched.
+  candidates.sort((a, b) => b.score - a.score || a.shapeIndex - b.shapeIndex);
+  for (const { sp } of candidates) {
 
     // 匹配到形状后执行具体修复，区分"已修改""无需修改"和"未找到"
     const fixResult = (() => {
@@ -203,11 +217,11 @@ function applyFix(xmlObj, issue) {
     })();
 
     if (fixResult === true) return true;     // 修改成功
-    if (fixResult === false) return 'noop';  // 匹配到但无需修改
+    if (fixResult === false) continue;       // try another plausible legacy candidate
     return fixResult || false;
   }
 
-  return false;
+  return candidates.length ? 'noop' : false;
 }
 
 function extractTextFromShape(sp) {
@@ -528,7 +542,11 @@ function isStandardFont(name) {
   if (!name) return false;
   const n = name.trim();
   const lower = n.toLowerCase();
-  return lower === '微软雅黑' || lower === 'microsoft yahei' || lower === 'microsoft yahei ui';
+  // Keep this definition identical to R004. "Microsoft YaHei UI" is a
+  // different font and must not be preserved during repair, otherwise an
+  // @_typeface value using it wins over the explicitly repaired script slots
+  // on the next scan and the issue can never disappear.
+  return lower === '微软雅黑' || lower === 'microsoft yahei';
 }
 
 function setFontToStandard(rPr) {

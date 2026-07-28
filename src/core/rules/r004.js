@@ -13,7 +13,9 @@ export const rule = {
   crossPage: false,
 };
 
-const STANDARD_FONTS = ['微软雅黑', 'Microsoft YaHei', 'Microsoft YaHei UI'];
+// Microsoft YaHei UI is a distinct UI-optimized family and is explicitly not
+// accepted by the R004 specification.
+const STANDARD_FONTS = ['微软雅黑', 'Microsoft YaHei'];
 
 function isStandardFont(font) {
   return STANDARD_FONTS.some(f => f.toLowerCase() === String(font).trim().toLowerCase());
@@ -77,6 +79,7 @@ export function check(slide, presInfo) {
         // 修复所需数据
         fixData: {
           page: page - 1, // 0-based
+          shapeIndex: t.shapeIndex,
           shapeId: t.shapeId,
           targetFont: '微软雅黑',
           textContent: t.text,

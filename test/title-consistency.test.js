@@ -20,11 +20,23 @@ test('selectTitle does not treat an untyped body placeholder outside the title r
   assert.equal(selectTitle({ texts: [body, title] }, presInfo), title);
 });
 
-test('selectTitle prefers an explicit title and rejects object placeholders in the title region', () => {
-  const body = { text: '大字号正文', phType: 'obj', x: 500, y: 300, w: 9000, h: 800, fontSize: 40 };
-  const title = { text: '真实标题', phType: 'title', x: 500, y: 500, w: 9000, h: 800, fontSize: 24 };
-  assert.equal(selectTitle({ texts: [body, title] }, presInfo), title);
-  assert.equal(selectTitle({ texts: [body] }, presInfo), null);
+test('selectTitle ignores placeholder semantics and follows the final visual layout', () => {
+  const misplacedPlaceholder = {
+    text: '被改作正文的标题占位符', phType: 'title',
+    x: 500, y: 2_000, w: 9_000, h: 2_000, fontSize: 12,
+  };
+  const visualTitle = {
+    text: '普通文本框制作的真实标题', phType: null,
+    x: 500, y: 300, w: 9_000, h: 800, fontSize: 24,
+  };
+
+  assert.equal(selectTitle({ texts: [misplacedPlaceholder, visualTitle] }, presInfo), visualTitle);
+  assert.equal(selectTitle({ texts: [misplacedPlaceholder] }, presInfo), null);
+});
+
+test('a placeholder in the visual title region may still act as the title regardless of its type', () => {
+  const visualTitle = { text: '视觉标题', phType: 'obj', x: 500, y: 300, w: 9000, h: 800, fontSize: 24 };
+  assert.equal(selectTitle({ texts: [visualTitle] }, presInfo), visualTitle);
 });
 
 test('uses the theme related through each layout and slide master', async () => {

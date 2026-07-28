@@ -18,15 +18,10 @@ function intersectionRatio(box, region) {
 
 export function selectTitle(slide, presInfo) {
   const nonEmpty = slide.texts.filter(t => t.text?.trim());
-  const explicitTitles = nonEmpty.filter(t => t.phType === 'title' || t.phType === 'ctrTitle');
-  if (explicitTitles.length) {
-    explicitTitles.sort((a, b) => (a.visibleY ?? a.y) - (b.visibleY ?? b.y));
-    return explicitTitles[0];
-  }
 
   function candidatesByRegion(region) {
-    // 正文/对象占位符即便位于页首或字号较大，也不能升级成标题。
-    return nonEmpty.filter(t => !t.phType && intersectionRatio({
+    // 占位符类型只描述模板原始意图，用户可能移动或改作他用；标题只按最终视觉位置判断。
+    return nonEmpty.filter(t => intersectionRatio({
       x: t.visibleX ?? t.x, y: t.visibleY ?? t.y,
       w: t.visibleW ?? t.w, h: t.visibleH ?? t.h,
     }, region) >= .5);

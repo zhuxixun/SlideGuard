@@ -176,17 +176,71 @@ export async function parseThemeColors(zip, themePath = null) {
  * @param {Object.<string,string>} [themeColors]
  * @returns {string|null}
  */
-function resolveColor(fill, themeColors) {
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function applyColorTransforms(hex, colorNode) {
+  if (!/^[0-9A-F]{6}$/i.test(hex || '') || !colorNode) return hex;
+  let rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const valueOf = name => {
+    const node = colorNode[`a:${name}`] || colorNode[name];
+    const value = Array.isArray(node) ? node[node.length - 1]?.['@_val'] : node?.['@_val'];
+    return Number.isFinite(Number(value)) ? Number(value) / 100000 : null;
+  };
+
+  const tint = valueOf('tint');
+  if (tint !== null) rgb = rgb.map(c => c + (255 - c) * tint);
+  const shade = valueOf('shade');
+  if (shade !== null) rgb = rgb.map(c => c * shade);
+
+  // DrawingML 的 lumMod/lumOff 作用于 HSL 亮度。这里转换为最终屏幕 RGB 后再参与规则比较。
+  const lumMod = valueOf('lumMod');
+  const lumOff = valueOf('lumOff');
+  if (lumMod !== null || lumOff !== null) {
+    let [r, g, b] = rgb.map(c => c / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    let l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > .5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    l = Math.max(0, Math.min(1, l * (lumMod ?? 1) + (lumOff ?? 0)));
+    const hue = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    if (s === 0) rgb = [l * 255, l * 255, l * 255];
+    else {
+      const q = l < .5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      rgb = [hue(p, q, h + 1 / 3), hue(p, q, h), hue(p, q, h - 1 / 3)].map(c => c * 255);
+    }
+  }
+  return rgb.map(c => clampByte(c).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+export function resolveColor(fill, themeColors) {
   if (!fill) return null;
   // 显式 RGB
   const srgb = fill['a:srgbClr'] || fill['srgbClr'];
-  if (srgb) return srgb['@_val'] || null;
+  if (srgb) return applyColorTransforms(srgb['@_val']?.toUpperCase() || null, srgb);
   // 主题色引用
   const scheme = fill['a:schemeClr'] || fill['schemeClr'];
   if (scheme && themeColors) {
     const name = scheme['@_val'];
     // 兼容带/不带命名空间前缀的两种 key 形式（a:dk1 与 dk1）
-    return themeColors[name] || themeColors['a:' + name] || null;
+    const base = themeColors[name] || themeColors['a:' + name] || null;
+    return applyColorTransforms(base, scheme);
   }
   return null;
 }
@@ -217,6 +271,8 @@ export function extractTexts(slideXml, themeColors) {
 
     // 提取位置
     const spPr = sp['p:spPr'] || sp['spPr'] || {};
+    const shapeStyle = sp['p:style'] || sp['style'] || {};
+    const fontRef = shapeStyle['a:fontRef'] || shapeStyle['fontRef'];
     const xfrm = spPr['a:xfrm'] || spPr['xfrm'] || {};
     const off = xfrm['a:off'] || xfrm['off'] || {};
     const ext = xfrm['a:ext'] || xfrm['ext'] || {};
@@ -271,7 +327,7 @@ export function extractTexts(slideXml, themeColors) {
         const runFill = rPr['a:solidFill'] || rPr['solidFill'] ||
           defRPr['a:solidFill'] || defRPr['solidFill'] ||
           lstDefRPr?.['a:solidFill'] || lstDefRPr?.['solidFill'] ||
-          spPr['a:solidFill'] || spPr['solidFill'];
+          fontRef;
         const runColor = resolveColor(runFill, themeColors);
         styleRuns.push({
           start,
@@ -301,10 +357,9 @@ export function extractTexts(slideXml, themeColors) {
       }
     }
 
-    // 形状级填充兜底（文本可能仅从 spPr 继承颜色）
+    // 形状样式的 fontRef 是文本颜色；spPr/solidFill 是形状背景色，不能当作文字颜色。
     if (!color) {
-      const solidFill = spPr['a:solidFill'] || spPr['solidFill'];
-      const c = resolveColor(solidFill, themeColors);
+      const c = resolveColor(fontRef, themeColors);
       if (c) color = c;
     }
 

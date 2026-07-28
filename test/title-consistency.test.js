@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import JSZip from 'jszip';
-import { extractTexts, getLayoutThemeMap, parseThemeColors } from '../src/core/pptxParser.js';
+import { extractTexts, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
 const presInfo = { width: 10_000, height: 7_500 };
@@ -103,4 +103,31 @@ test('extractTexts resolves schemeClr before R008 checks the title color', () =>
 
   const issues = check({ page: 1, texts }, presInfo);
   assert.equal(issues.filter(issue => issue.property === 'color').length, 1);
+});
+
+test('resolves theme color transforms to the final visual RGB', () => {
+  const fill = {
+    'a:schemeClr': {
+      '@_val': 'accent1',
+      'a:tint': { '@_val': '50000' },
+    },
+  };
+  assert.equal(resolveColor(fill, { accent1: 'C00000' }), 'E08080');
+});
+
+test('uses shape fontRef for text color and never confuses the shape background with text', () => {
+  const slideXml = {
+    'p:sld': { 'p:cSld': { 'p:spTree': { 'p:sp': {
+      'p:nvSpPr': { 'p:cNvPr': { '@_id': '9' }, 'p:nvPr': {} },
+      'p:spPr': {
+        'a:xfrm': { 'a:off': { '@_x': '500', '@_y': '300' }, 'a:ext': { '@_cx': '9000', '@_cy': '800' } },
+        'a:solidFill': { 'a:srgbClr': { '@_val': 'C00000' } },
+      },
+      'p:style': { 'a:fontRef': { 'a:schemeClr': { '@_val': 'accent1' } } },
+      'p:txBody': { 'a:p': { 'a:r': { 'a:rPr': { '@_b': '1' }, 'a:t': '视觉颜色标题' } } },
+    } } } },
+  };
+  const texts = extractTexts(slideXml, { accent1: '4472C4' });
+  assert.equal(texts[0].styleRuns[0].color, '4472C4');
+  assert.equal(check({ page: 1, texts }, presInfo).some(issue => issue.property === 'color'), true);
 });

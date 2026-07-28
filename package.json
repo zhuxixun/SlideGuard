@@ -6,6 +6,7 @@
   "description": "离线 PowerPoint 质量与合规检查工具（纯浏览器端）",
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test",
     "watch": "node build.mjs --watch"
   },
   "devDependencies": {

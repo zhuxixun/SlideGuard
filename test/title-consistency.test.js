@@ -39,6 +39,17 @@ test('a placeholder in the visual title region may still act as the title regard
   assert.equal(selectTitle({ texts: [visualTitle] }, presInfo), visualTitle);
 });
 
+test('ignores a corrupted layout title region and ranks visual position before unresolved font size', () => {
+  const title = { text: '真实标题', phType: null, x: 500, y: 300, w: 9000, h: 700, fontSize: null };
+  const body = { text: '显式小字号正文', phType: 'title', x: 500, y: 1250, w: 9000, h: 500, fontSize: 12 };
+  const slide = {
+    texts: [body, title],
+    // 模板里的标题占位符已经被错误地放到了正文区域。
+    layoutTitlePos: { x: 500, y: 1250, w: 9000, h: 500 },
+  };
+  assert.equal(selectTitle(slide, presInfo), title);
+});
+
 test('uses the theme related through each layout and slide master', async () => {
   const zip = new JSZip();
   zip.file('ppt/slideLayouts/_rels/slideLayout2.xml.rels', `

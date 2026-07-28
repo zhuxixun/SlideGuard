@@ -27,17 +27,21 @@ export function selectTitle(slide, presInfo) {
     }, region) >= .5);
   }
 
-  const defaultRegion = { x: presInfo.width * .05, y: presInfo.height * .03, w: presInfo.width * .9, h: presInfo.height * .19 };
-  const layoutRegion = (slide.layoutTitlePos?.w && slide.layoutTitlePos?.h) ? slide.layoutTitlePos : null;
+  // 不采用母版/版式的标题占位符区域：实际文件可能已把占位符移作正文。
+  const visualTitleBand = {
+    x: presInfo.width * .03,
+    y: presInfo.height * .02,
+    w: presInfo.width * .94,
+    h: presInfo.height * .20,
+  };
+  const candidates = candidatesByRegion(visualTitleBand);
 
-  // 优先用版式标题区；若找不到候选，降级到默认标题区（避免因版式位置与实际标题错位而漏检）
-  let candidates = layoutRegion ? candidatesByRegion(layoutRegion) : [];
-  if (candidates.length === 0) {
-    candidates = candidatesByRegion(defaultRegion);
-  }
-
-  candidates.sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0) ||
-    (a.visibleY ?? a.y) - (b.visibleY ?? b.y) || (a.visibleX ?? a.x) - (b.visibleX ?? b.x));
+  // 位置优先于字号。字号经常继承自母版而在当前页 XML 中为空，不能让 null(0) 的真实标题
+  // 输给下方显式写了小字号的正文。
+  candidates.sort((a, b) =>
+    (a.visibleY ?? a.y) - (b.visibleY ?? b.y) ||
+    (b.fontSize || 0) - (a.fontSize || 0) ||
+    (a.visibleX ?? a.x) - (b.visibleX ?? b.x));
   return candidates[0] || null;
 }
 

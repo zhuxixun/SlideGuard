@@ -238,7 +238,7 @@ function fixFont(sp, issue) {
   const pars = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
   let changed = false;
 
-  const setFontProps = (rPr) => {
+  const setFontProps = (rPr, force = false) => {
     if (!rPr) return false;
     let mod = false;
     if (rPr['@_typeface'] && !isStandardFont(rPr['@_typeface'])) {
@@ -255,24 +255,55 @@ function fixFont(sp, issue) {
       ea['@_typeface'] = targetFont;
       mod = true;
     }
+    // Explicit values are required when the effective bad font comes from a
+    // theme/master/list style and the run itself has no font element.
+    if (force && (!rPr['a:latin'] || rPr['a:latin']['@_typeface'] !== targetFont)) {
+      rPr['a:latin'] = { ...(rPr['a:latin'] || {}), '@_typeface': targetFont };
+      mod = true;
+    }
+    if (force && (!rPr['a:ea'] || rPr['a:ea']['@_typeface'] !== targetFont)) {
+      rPr['a:ea'] = { ...(rPr['a:ea'] || {}), '@_typeface': targetFont };
+      mod = true;
+    }
     return mod;
   };
 
+  // Text-box list styles are a common source of inherited fonts.
+  const lstStyle = txBody['a:lstStyle'] || txBody['lstStyle'];
+  if (lstStyle) {
+    for (const [key, pPr] of Object.entries(lstStyle)) {
+      if (!/(?:^|:)defPPr$|(?:^|:)lvl\d+pPr$/.test(key) || !pPr) continue;
+      const defRPr = pPr['a:defRPr'] || pPr['defRPr'];
+      if (defRPr && setFontProps(defRPr)) changed = true;
+    }
+  }
+
   for (const p of pars) {
     // 段落默认字体
-    const pPr = p['a:pPr'];
+    const pPr = p['a:pPr'] || p['pPr'];
     if (pPr) {
-      const defRPr = pPr['a:defRPr'];
+      const defRPr = pPr['a:defRPr'] || pPr['defRPr'];
       if (defRPr && setFontProps(defRPr)) changed = true;
     }
 
     // 文本级 run 字体
     const runs = p['a:r'] || [];
-    const runList = Array.isArray(runs) ? runs : [runs];
+    const fields = p['a:fld'] || [];
+    const runList = [
+      ...(Array.isArray(runs) ? runs : [runs]),
+      ...(Array.isArray(fields) ? fields : [fields]),
+    ].filter(Boolean);
     for (const r of runList) {
-      const rPr = r['a:rPr'];
-      if (rPr && setFontProps(rPr)) changed = true;
+      let rPr = r['a:rPr'] || r['rPr'];
+      if (!rPr) {
+        rPr = {};
+        r['a:rPr'] = rPr;
+      }
+      if (setFontProps(rPr, true)) changed = true;
     }
+
+    const endParaRPr = p['a:endParaRPr'] || p['endParaRPr'];
+    if (endParaRPr && setFontProps(endParaRPr, true)) changed = true;
   }
 
   return changed;

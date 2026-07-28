@@ -25,9 +25,19 @@ export function check(slide, presInfo) {
 
   for (const t of texts) {
     if (!t.text.trim()) continue;
-    const font = (t.fontName || '微软雅黑').trim();
+    // A text box can contain several runs with different fonts. Checking only
+    // t.fontName (the first resolved font) misses mixed-font text boxes.
+    const runFonts = (t.styleRuns || [])
+      .filter(r => r.text && String(r.text).length > 0)
+      .map(r => r.fontName)
+      .filter(Boolean);
+    const fonts = runFonts.length ? runFonts : [t.fontName || '微软雅黑'];
+    const badFonts = [...new Set(fonts
+      .map(font => String(font).trim())
+      .filter(font => !STANDARD_FONTS.some(f => f.toLowerCase() === font.toLowerCase())))];
 
-    if (!STANDARD_FONTS.some(f => f.toLowerCase() === font.toLowerCase())) {
+    if (badFonts.length) {
+      const font = badFonts.join('、');
       issues.push({
         rule: 'R004',
         type: '字体一致性',

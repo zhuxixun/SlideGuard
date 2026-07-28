@@ -212,7 +212,7 @@ export function extractTexts(slideXml, themeColors) {
     const nvs = sp['p:nvSpPr'] || sp['nvSpPr'] || {};
     const nvsPr = nvs['p:nvPr'] || nvs['nvPr'] || {};
     const ph = nvsPr['p:ph'] || nvsPr['ph'];
-    const isTitle = ph && (ph['@_type'] === 'title' || ph['@_type'] === 'ctrTitle' || ph['@_type'] === undefined);
+    const isTitle = ph && (ph['@_type'] === 'title' || ph['@_type'] === 'ctrTitle');
     const phType = ph?.['@_type'] || (ph ? 'title' : null);
 
     // 提取位置

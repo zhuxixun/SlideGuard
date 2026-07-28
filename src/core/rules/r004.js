@@ -27,7 +27,7 @@ export function check(slide, presInfo) {
     if (!t.text.trim()) continue;
     const font = (t.fontName || '微软雅黑').trim();
 
-    if (!STANDARD_FONTS.includes(font)) {
+    if (!STANDARD_FONTS.some(f => f.toLowerCase() === font.toLowerCase())) {
       issues.push({
         rule: 'R004',
         type: '字体一致性',

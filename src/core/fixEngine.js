@@ -493,7 +493,8 @@ function cloneRun(original, newText) {
 function isStandardFont(name) {
   if (!name) return false;
   const n = name.trim();
-  return n === '微软雅黑' || n === 'Microsoft YaHei' || n === 'Microsoft YaHei UI';
+  const lower = n.toLowerCase();
+  return lower === '微软雅黑' || lower === 'microsoft yahei' || lower === 'microsoft yahei ui';
 }
 
 function setFontToStandard(rPr) {

@@ -62,8 +62,9 @@ export function check(slide, presInfo, context = {}) {
 
   // R004 同时启用时由 R004 报告字体，避免同一字体事实重复。
   if (!context.activeRuleIds?.includes('R004')) {
-    const badFonts = runs.filter(r => r.fontName && !STANDARD_FONTS.includes(r.fontName));
-    if (badFonts.length) issues.push(issue(title, slide, 'font', [...new Set(badFonts.map(r => r.fontName))].join('、'), '微软雅黑', rangesFor(title, r => r.fontName && !STANDARD_FONTS.includes(r.fontName))));
+    const isBadFont = n => n && !STANDARD_FONTS.some(f => f.toLowerCase() === n.trim().toLowerCase());
+    const badFonts = runs.filter(r => isBadFont(r.fontName));
+    if (badFonts.length) issues.push(issue(title, slide, 'font', [...new Set(badFonts.map(r => r.fontName))].join('、'), '微软雅黑', rangesFor(title, r => isBadFont(r.fontName))));
   }
   const badBold = runs.filter(r => r.bold === false);
   if (badBold.length) issues.push(issue(title, slide, 'bold', '未加粗', '加粗', rangesFor(title, r => r.bold === false)));

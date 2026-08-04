@@ -142,6 +142,23 @@ test('resolves theme color transforms to the final visual RGB', () => {
   assert.equal(resolveColor(fill, { accent1: 'C00000' }), 'E08080');
 });
 
+test('resolves system theme colors through their portable lastClr value', async () => {
+  const zip = new JSZip();
+  zip.file('ppt/theme/theme1.xml', `<a:theme><a:themeElements><a:clrScheme>
+    <a:dk1><a:sysClr val="windowText" lastClr="C00000"/></a:dk1>
+  </a:clrScheme></a:themeElements></a:theme>`);
+  assert.deepEqual(await parseThemeColors(zip), { dk1: 'C00000' });
+  assert.equal(resolveColor({ 'a:sysClr': { '@_val': 'windowText', '@_lastClr': 'C00000' } }), 'C00000');
+});
+
+test('does not report an unresolved inherited title color as a mismatch', () => {
+  const title = {
+    text: '继承颜色标题', x: 500, y: 300, w: 9000, h: 800,
+    styleRuns: [{ start: 0, end: 6, text: '继承颜色标题', color: null, bold: true }],
+  };
+  assert.equal(check({ page: 1, texts: [title] }, presInfo).some(issue => issue.property === 'color'), false);
+});
+
 test('uses shape fontRef for text color and never confuses the shape background with text', () => {
   const slideXml = {
     'p:sld': { 'p:cSld': { 'p:spTree': { 'p:sp': {

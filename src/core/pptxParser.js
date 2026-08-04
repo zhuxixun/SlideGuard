@@ -155,7 +155,12 @@ export async function parseThemeColors(zip, themePath = null) {
       // 但 schemeClr 的 val 属性不带前缀（"dk1"），因此存储时需去掉前缀以匹配 resolveColor 的查询
       for (const [key, value] of Object.entries(clrScheme)) {
         if (key.startsWith('@_') || key === 'a:extLst' || key === 'extLst') continue;
-        const val = value?.['a:srgbClr']?.['@_val'] || value?.['srgbClr']?.['@_val'];
+        const srgb = value?.['a:srgbClr'] || value?.['srgbClr'];
+        const system = value?.['a:sysClr'] || value?.['sysClr'];
+        // Office normally stores dk1/lt1 as system colours. `val` is a
+        // platform colour name (windowText/window), while lastClr is the
+        // portable RGB fallback PowerPoint actually writes for rendering.
+        const val = srgb?.['@_val'] || system?.['@_lastClr'];
         if (val) {
           const colorName = key.includes(':') ? key.split(':').pop() : key;
           colors[colorName] = val.toUpperCase();
@@ -234,6 +239,21 @@ export function resolveColor(fill, themeColors) {
   // 显式 RGB
   const srgb = fill['a:srgbClr'] || fill['srgbClr'];
   if (srgb) return applyColorTransforms(srgb['@_val']?.toUpperCase() || null, srgb);
+  // System colours occur both in themes and (less commonly) directly in
+  // text runs. lastClr is deliberately preferred because names such as
+  // windowText depend on the operating-system theme.
+  const system = fill['a:sysClr'] || fill['sysClr'];
+  if (system) return applyColorTransforms(system['@_lastClr']?.toUpperCase() || null, system);
+  // scRGB stores linear channel percentages in the 0..100000 range.
+  const scrgb = fill['a:scrgbClr'] || fill['scrgbClr'];
+  if (scrgb) {
+    const linearToSrgb = value => {
+      const c = Math.max(0, Math.min(1, Number(value) / 100000));
+      return clampByte(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055));
+    };
+    const hex = ['@_r', '@_g', '@_b'].map(key => linearToSrgb(scrgb[key]).toString(16).padStart(2, '0')).join('').toUpperCase();
+    return applyColorTransforms(hex, scrgb);
+  }
   // 主题色引用
   const scheme = fill['a:schemeClr'] || fill['schemeClr'];
   if (scheme && themeColors) {

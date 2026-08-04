@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import JSZip from 'jszip';
-import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutTextColorStyles, getLayoutThemeMap, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
+import { applyColorMap, extractTexts, getLayoutColorMap, getLayoutTextColorStyles, getLayoutThemeMap, getSlideColorMapOverride, parseThemeColors, resolveColor } from '../src/core/pptxParser.js';
 import { fixIssues } from '../src/core/fixEngine.js';
 import { check, selectTitle } from '../src/core/rules/r008.js';
 
@@ -201,4 +201,44 @@ test('inherits ordinary text color from the slide master otherStyle', async () =
   const styles = await getLayoutTextColorStyles(zip, [layoutPath]);
   const fill = styles.get(layoutPath).other;
   assert.equal(resolveColor(fill, { accent1: '4472C4' }), '4472C4');
+});
+
+test('uses the paragraph level list style that PowerPoint renders', () => {
+  const slideXml = { 'p:sld': { 'p:cSld': { 'p:spTree': { 'p:sp': {
+    'p:nvSpPr': { 'p:cNvPr': { '@_id': '10' }, 'p:nvPr': {} },
+    'p:spPr': { 'a:xfrm': { 'a:off': { '@_x': '500', '@_y': '300' }, 'a:ext': { '@_cx': '9000', '@_cy': '800' } } },
+    'p:txBody': {
+      'a:lstStyle': { 'a:lvl1pPr': { 'a:defRPr': { 'a:solidFill': { 'a:srgbClr': { '@_val': 'C00000' } } } } },
+      'a:p': { 'a:pPr': { '@_lvl': '0' }, 'a:r': { 'a:rPr': {}, 'a:t': '视觉红色标题' } },
+    },
+  } } } } };
+  const texts = extractTexts(slideXml, { tx1: '000000' }, { other: { 'a:schemeClr': { '@_val': 'tx1' } } });
+  assert.equal(texts[0].styleRuns[0].color, 'C00000');
+  assert.equal(check({ page: 1, texts }, presInfo).some(issue => issue.property === 'color'), false);
+});
+
+test('reads slide-level color map overrides', () => {
+  const slideXml = { 'p:sld': { 'p:clrMapOvr': { 'a:overrideClrMapping': { '@_tx1': 'accent2' } } } };
+  assert.deepEqual(getSlideColorMapOverride(slideXml), { tx1: 'accent2' });
+  assert.equal(applyColorMap({ accent2: 'C00000' }, getSlideColorMapOverride(slideXml)).tx1, 'C00000');
+});
+
+test('inherits the rendered color from a matching layout placeholder', async () => {
+  const zip = new JSZip();
+  const layoutPath = 'ppt/slideLayouts/slideLayout1.xml';
+  zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `
+    <Relationships><Relationship Type="x/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`);
+  zip.file('ppt/slideMasters/slideMaster1.xml', '<p:sldMaster><p:txStyles><p:titleStyle/></p:txStyles></p:sldMaster>');
+  zip.file(layoutPath, `<p:sldLayout><p:cSld><p:spTree><p:sp>
+    <p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+    <p:txBody><a:lstStyle><a:lvl1pPr><a:defRPr><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:defRPr></a:lvl1pPr></a:lstStyle></p:txBody>
+  </p:sp></p:spTree></p:cSld></p:sldLayout>`);
+  const styles = (await getLayoutTextColorStyles(zip, [layoutPath])).get(layoutPath);
+  const slideXml = { 'p:sld': { 'p:cSld': { 'p:spTree': { 'p:sp': {
+    'p:nvSpPr': { 'p:cNvPr': { '@_id': '11' }, 'p:nvPr': { 'p:ph': { '@_type': 'title' } } },
+    'p:spPr': { 'a:xfrm': { 'a:off': { '@_x': '500', '@_y': '300' }, 'a:ext': { '@_cx': '9000', '@_cy': '800' } } },
+    'p:txBody': { 'a:p': { 'a:r': { 'a:rPr': {}, 'a:t': '版式继承红色标题' } } },
+  } } } } };
+  const texts = extractTexts(slideXml, { tx1: '000000' }, styles);
+  assert.equal(texts[0].styleRuns[0].color, 'C00000');
 });

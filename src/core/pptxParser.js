@@ -289,9 +289,10 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
     const ph = nvsPr['p:ph'] || nvsPr['ph'];
     // ECMA-376: p:ph 未声明 type 时默认是 obj，而不是 title。
     const phType = ph ? (ph['@_type'] || 'obj') : null;
-    const inheritedFill = (phType === 'title' || phType === 'ctrTitle')
-      ? inheritedTextColors.title
-      : (phType ? inheritedTextColors.body : inheritedTextColors.other);
+    const phIdx = ph?.['@_idx'] ?? null;
+    const inheritedStyleKey = (phType === 'title' || phType === 'ctrTitle')
+      ? 'title'
+      : (phType ? 'body' : 'other');
 
     // 提取位置
     const spPr = sp['p:spPr'] || sp['spPr'] || {};
@@ -322,10 +323,19 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
     let color = null;
     const styleRuns = [];
 
-    const lstDefRPr = txBody['a:lstStyle']?.['a:defPPr']?.['a:defRPr'];
+    const listStyle = txBody['a:lstStyle'] || txBody['lstStyle'] || {};
+    const listDefaultRPr = listStyle['a:defPPr']?.['a:defRPr'] || listStyle.defPPr?.defRPr;
     for (const p of pars) {
       const pPr = p['a:pPr'] || p['pPr'] || {};
       const defRPr = pPr['a:defRPr'] || pPr['defRPr'] || {};
+      const level = Math.max(0, Math.min(8, parseInt(pPr['@_lvl'] ?? '0', 10) || 0));
+      const levelPPr = listStyle[`a:lvl${level + 1}pPr`] || listStyle[`lvl${level + 1}pPr`] || {};
+      const lstDefRPr = levelPPr['a:defRPr'] || levelPPr.defRPr || listDefaultRPr;
+      const placeholderKey = phIdx !== null ? `idx:${phIdx}` : `type:${phType || 'obj'}`;
+      const inheritedLevels = inheritedTextColors.placeholders?.[placeholderKey] ||
+        inheritedTextColors.placeholders?.[`type:${phType || 'obj'}`] ||
+        inheritedTextColors.levels?.[inheritedStyleKey];
+      const inheritedFill = inheritedLevels?.[level] || inheritedTextColors[inheritedStyleKey];
       const runs = p['a:r'] || [];
       const fields = p['a:fld'] || [];
       // Field nodes (slide number/date/etc.) carry text and run properties just
@@ -389,19 +399,9 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
     }
 
     // 检查文本框级默认样式（lstStyle — 占位符/文本框的默认格式，PowerPoint 常用此层继承加粗）
-    if (lstDefRPr) {
-      if (!fontSize && lstDefRPr['@_sz']) fontSize = parseFloat(lstDefRPr['@_sz']) / 100;
-      if (!fontName) fontName = lstDefRPr['@_typeface'] || (lstDefRPr['a:latin']?.['@_typeface']);
-      if (!color) {
-        const solidFill = lstDefRPr['a:solidFill'] || lstDefRPr['solidFill'];
-        const c = resolveColor(solidFill, themeColors);
-        if (c) color = c;
-      }
-    }
-
     // 形状样式的 fontRef 是文本颜色；spPr/solidFill 是形状背景色，不能当作文字颜色。
     if (!color) {
-      const c = resolveColor(fontRef || inheritedFill, themeColors);
+      const c = resolveColor(fontRef || inheritedTextColors[inheritedStyleKey], themeColors);
       if (c) color = c;
     }
 
@@ -413,7 +413,7 @@ export function extractTexts(slideXml, themeColors, inheritedTextColors = {}) {
         bold,
         color,
         x, y, w, h, rotation, visibleX, visibleY, visibleW, visibleH,
-        phType,
+        phType, phIdx,
         styleRuns,
         shapeIndex,
         shapeId: sp['@_id'] || nvs['p:cNvPr']?.['@_id'] || nvs['cNvPr']?.['@_id'],
@@ -612,15 +612,42 @@ export async function getLayoutColorMap(zip, layoutPaths) {
   return result;
 }
 
-function textStyleFill(style) {
-  if (!style) return null;
+function textStyleFills(style) {
+  const fills = Array(9).fill(null);
+  if (!style) return fills;
+  const defaultRPr = style['a:defPPr']?.['a:defRPr'] || style.defPPr?.defRPr;
+  const defaultFill = defaultRPr?.['a:solidFill'] || defaultRPr?.solidFill || null;
   for (let level = 1; level <= 9; level++) {
     const pPr = style[`a:lvl${level}pPr`] || style[`lvl${level}pPr`];
     const rPr = pPr?.['a:defRPr'] || pPr?.defRPr;
-    const fill = rPr?.['a:solidFill'] || rPr?.solidFill;
-    if (fill) return fill;
+    fills[level - 1] = rPr?.['a:solidFill'] || rPr?.solidFill || defaultFill;
   }
-  return null;
+  return fills;
+}
+
+function placeholderTextStyles(part) {
+  const result = {};
+  const cSld = part?.['p:cSld'] || part?.cSld || {};
+  const tree = cSld['p:spTree'] || cSld.spTree || {};
+  for (const sp of collectSpElements(tree)) {
+    const nv = sp['p:nvSpPr'] || sp.nvSpPr || {};
+    const nvPr = nv['p:nvPr'] || nv.nvPr || {};
+    const ph = nvPr['p:ph'] || nvPr.ph;
+    if (!ph) continue;
+    const type = ph['@_type'] || 'obj';
+    const idx = ph['@_idx'];
+    const txBody = sp['p:txBody'] || sp.txBody || {};
+    const fills = textStyleFills(txBody['a:lstStyle'] || txBody.lstStyle);
+    if (!fills.some(Boolean)) continue;
+    if (idx !== undefined) result[`idx:${idx}`] = fills;
+    // Type is a useful fallback for title placeholders, which commonly omit idx.
+    if (!result[`type:${type}`]) result[`type:${type}`] = fills;
+  }
+  return result;
+}
+
+function mergeFillLevels(fallback, override) {
+  return Array.from({ length: 9 }, (_, i) => override?.[i] || fallback?.[i] || null);
 }
 
 /** 读取母版的 titleStyle/bodyStyle/otherStyle 文字颜色继承。 */
@@ -637,14 +664,25 @@ export async function getLayoutTextColorStyles(zip, layoutPaths) {
         const parsed = file ? parser.parse(await file.async('text')) : {};
         const master = parsed['p:sldMaster'] || parsed.sldMaster || parsed;
         const txStyles = master['p:txStyles'] || master.txStyles || {};
+        const titleLevels = textStyleFills(txStyles['p:titleStyle'] || txStyles.titleStyle);
+        const bodyLevels = textStyleFills(txStyles['p:bodyStyle'] || txStyles.bodyStyle);
+        const otherLevels = textStyleFills(txStyles['p:otherStyle'] || txStyles.otherStyle);
         styles = {
-          title: textStyleFill(txStyles['p:titleStyle'] || txStyles.titleStyle),
-          body: textStyleFill(txStyles['p:bodyStyle'] || txStyles.bodyStyle),
-          other: textStyleFill(txStyles['p:otherStyle'] || txStyles.otherStyle),
+          title: titleLevels[0], body: bodyLevels[0], other: otherLevels[0],
+          levels: { title: titleLevels, body: bodyLevels, other: otherLevels },
+          placeholders: placeholderTextStyles(master),
         };
         masterStyles.set(masterPath, styles);
       }
-      result.set(layoutPath, styles);
+      const layoutFile = zip.file(layoutPath);
+      const layoutParsed = layoutFile ? parser.parse(await layoutFile.async('text')) : {};
+      const layout = layoutParsed['p:sldLayout'] || layoutParsed.sldLayout || layoutParsed;
+      const layoutPlaceholders = placeholderTextStyles(layout);
+      const placeholders = { ...styles.placeholders };
+      for (const [key, levels] of Object.entries(layoutPlaceholders)) {
+        placeholders[key] = mergeFillLevels(placeholders[key], levels);
+      }
+      result.set(layoutPath, { ...styles, placeholders });
     } catch (e) {
       console.warn('[PptxParser] 解析母版文本颜色失败:', layoutPath, e.message);
     }
@@ -658,6 +696,13 @@ export function applyColorMap(themeColors, colorMap) {
     if (themeColors[target]) resolved[alias] = themeColors[target];
   }
   return resolved;
+}
+
+/** Read a slide's clrMapOvr. It takes precedence over layout/master mappings. */
+export function getSlideColorMapOverride(slideXml) {
+  const slide = slideXml['p:sld'] || slideXml.sld || slideXml;
+  const override = slide['p:clrMapOvr'] || slide.clrMapOvr;
+  return readColorMap(override?.['a:overrideClrMapping'] || override?.overrideClrMapping);
 }
 
 /**

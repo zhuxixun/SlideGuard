@@ -9,7 +9,7 @@
  *   5. 汇总结果
  */
 import JSZip from 'jszip';
-import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, getLayoutThemeMap, getLayoutColorMap, getLayoutTextColorStyles, applyColorMap, parseThemeColors } from './pptxParser.js';
+import { parsePptx, loadSlide, extractTexts, extractShapes, extractLayoutTitlePositions, getSlideLayoutMap, getLayoutThemeMap, getLayoutColorMap, getLayoutTextColorStyles, getSlideColorMapOverride, applyColorMap, parseThemeColors } from './pptxParser.js';
 import { store } from '../store.js';
 
 /* 规则注册表 */
@@ -83,7 +83,8 @@ export async function runScan(pptxData, ruleIds, options = {}) {
       const layoutPath = slideLayoutMap[i];
       const themePath = layoutPath ? layoutThemeMap.get(layoutPath) : null;
       const baseThemeColors = (themePath && themeColorsByPath.get(themePath)) || fallbackThemeColors;
-      const themeColors = applyColorMap(baseThemeColors, layoutColorMap.get(layoutPath));
+      const effectiveColorMap = { ...layoutColorMap.get(layoutPath), ...getSlideColorMapOverride(slideXml) };
+      const themeColors = applyColorMap(baseThemeColors, effectiveColorMap);
       const texts = extractTexts(slideXml, themeColors, layoutTextColorStyles.get(layoutPath));
       const shapes = extractShapes(slideXml);
       // 获取该幻灯片关联的版式标题占位符位置

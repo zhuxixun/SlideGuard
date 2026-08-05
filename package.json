@@ -1,6 +1,6 @@
 {
   "name": "slideguard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "离线 PowerPoint 质量与合规检查工具（纯浏览器端）",
